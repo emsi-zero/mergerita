@@ -56,7 +56,7 @@ Resume: An MR with the pass label gets `AreaReview` rows (unbooked); the outbox 
 
 ## Session 4 — Booking engine, audit coverage, read API
 
-State: implemented, awaiting Gate B · Covers: RMO-12, RMO-13, RMO-14, RMO-15, RMO-17, RMO-19
+State: done · Covers: RMO-12, RMO-13, RMO-14, RMO-15, RMO-17, RMO-19
 
 - [x] T1 — Add `reviews` models `Leave` and `CapacityDay` (unique person+day), and the migration — RMO-12, INV-3
 - [x] T2 — Add `reviews/booking.py` `book_area_review(area_review)`: candidates are owners of all the review's areas, with the author excluded (and checked again before save), people on leave or not working excluded; one query with ownerships. For each day from today to the horizon, lock the candidates' `CapacityDay` rows, keep those with free minutes ≥ slot, rank by `(tier, -free, open_bookings, person_id)`, book the first. Set reviewer, day and reason; increment `booked_minutes`; record audit; enqueue `set_reviewer` and `notify`. With no fit, leave it `unbooked`, record audit, enqueue an admin alert. No transaction of its own — RMO-12, RMO-13, RMO-14, RMO-15, INV-2, INV-3

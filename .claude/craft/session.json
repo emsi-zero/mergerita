@@ -812,10 +812,17 @@
       "at": "2026-10-26T11:59:02+00:00",
       "session_id": null,
       "label": "trace"
+    },
+    {
+      "command": "craft-spec trace",
+      "exit_code": 0,
+      "at": "2026-10-26T11:59:18+00:00",
+      "session_id": null,
+      "label": "trace"
     }
   ],
   "route": "project",
   "checkpoint_command": "docker compose run --rm web pytest -q",
   "spec": "2026-10-26-orchestrator-thin-slice-prototype",
-  "updated_at": "2026-10-26T11:59:02+00:00"
+  "updated_at": "2026-10-26T11:59:18+00:00"
 }
