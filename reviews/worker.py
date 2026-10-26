@@ -7,6 +7,7 @@ from django.db.models import OuterRef, Q, Subquery
 from django.utils import timezone
 
 from integrations.models import InboxEvent
+from reviews.alerts import queue_admin_alert
 from reviews.lifecycle import handle_event
 
 logger = logging.getLogger(__name__)
@@ -24,23 +25,52 @@ def process_next_event() -> bool:
     settled_before = timezone.now() - timedelta(
         seconds=settings.RMO_INBOX_CLAIM_GRACE_SECONDS
     )
+    # Failed events stay in this subquery, so later events of the MR wait behind them.
     oldest_of_mr = pending.filter(mr_key=OuterRef("mr_key")).order_by("id")
-    with transaction.atomic():
-        event = (
-            pending.filter(
-                Q(received_at__lte=settled_before),
-                Q(mr_key__isnull=True) | Q(id=Subquery(oldest_of_mr.values("id")[:1])),
+    event = None
+    try:
+        with transaction.atomic():
+            event = (
+                pending.filter(
+                    Q(received_at__lte=settled_before),
+                    Q(failed_at__isnull=True),
+                    Q(mr_key__isnull=True)
+                    | Q(id=Subquery(oldest_of_mr.values("id")[:1])),
+                )
+                .order_by("id")
+                .select_for_update(skip_locked=True)
+                .first()
             )
-            .order_by("id")
-            .select_for_update(skip_locked=True)
-            .first()
-        )
+            if event is None:
+                return False
+            handle_event(event)
+            event.processed_at = timezone.now()
+            event.save(update_fields=["processed_at"])
+    except Exception as error:  # pylint: disable=broad-exception-caught
         if event is None:
-            return False
-        handle_event(event)
-        event.processed_at = timezone.now()
-        event.save(update_fields=["processed_at"])
+            raise
+        logger.exception("event %s mr_key=%s failed", event.pk, event.mr_key)
+        _quarantine(event, error)
+        return True
     logger.info(
         "processed event %s kind=%s mr_key=%s", event.pk, event.event_kind, event.mr_key
     )
     return True
+
+
+def _quarantine(event: InboxEvent, error: Exception) -> None:
+    """Mark a failed event and queue an admin alert, after its changes rolled back.
+
+    The mark is conditional, so a second worker that also failed the event
+    does not queue a second alert.
+    """
+    message = f"{type(error).__name__}: {error}"
+    with transaction.atomic():
+        marked = InboxEvent.objects.filter(
+            pk=event.pk, processed_at__isnull=True, failed_at__isnull=True
+        ).update(failed_at=timezone.now(), last_error=message)
+        if marked == 1:
+            queue_admin_alert(
+                f"Inbox event {event.pk} (MR {event.mr_key}) failed: {message}. "
+                "Later events of this MR wait until an admin clears the failed mark."
+            )

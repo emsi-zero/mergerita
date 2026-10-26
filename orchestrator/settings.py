@@ -89,3 +89,8 @@ RMO_INBOX_CLAIM_GRACE_SECONDS = 2
 # Outbox.
 RMO_OUTBOX_MAX_ATTEMPTS = 5
 RMO_OUTBOX_BACKOFF_SECONDS = 30
+RMO_OUTBOX_LEASE_SECONDS = 60
+
+# Adapters, as dotted paths to classes. The prototype points at the fakes.
+RMO_GITLAB_GATEWAY = "integrations.fakes.FakeGitLabGateway"
+RMO_NOTIFIER = "integrations.fakes.FakeNotifier"

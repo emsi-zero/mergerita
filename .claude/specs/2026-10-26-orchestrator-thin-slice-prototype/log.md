@@ -52,3 +52,20 @@ Deferred to Session 3: [Medium, conf 0.5] partial index on pending `id` for the 
 Deferred: NUL / lone-surrogate JSON strings still give a 500 from jsonb (GitLab does not send them). Low style notes (docstrings on Command, `dict[str, object]`, length 64 copied from the model).
 Note: `run_worker --once` leaves events younger than the grace pending.
 Session 2: done.
+
+## 2026-10-26 — spec delta: Session 3 review
+RMO-7: fail label wins when both labels are present. RMO-10: the combined owner must not be the MR author. RMO-11: an MR with no changed files also goes to triage. Contracts: settings list completed (backoff, lease, claim grace, working days, gateway, notifier). design.md: M2M through-table FK exception recorded.
+Why: Session 3 reviewer and deep-reviewer findings. Approved by the developer (empty MR → triage; exclude author; fail wins).
+
+## 2026-10-26 11:47 UTC — spec delta approved
+sha256 8fb1a7765ed9
+
+## 2026-10-26 — Session 3 Gate A
+tests `scripts/test.sh -q` PASS (15 passed, 22 subtests) · pylint 10.00 PASS · isort PASS · black PASS · `craft-spec trace --session 3` PASS (7/7)
+
+## 2026-10-26 — Session 3 Gate B
+reviewer (spec, style, query): COMMENT, no Critical/High. deep-reviewer (logic, security): COMMENT, no Critical/High, no security findings.
+Fixed: [Medium] outbox batch lease + unfenced result writes → one claim at a time, results fenced on the held lease; [Medium] reclaim after lease expiry did not count an attempt → attempts counted at claim, exhausted leases fail; [Medium] empty change list stalls MR → triage (delta RMO-11); [Medium] quarantine raced after lock release → conditional failed mark, alert only on count 1; [Medium] combined owner could be the author → excluded (delta RMO-10); [Medium] Protocol/handler docstrings; [Low] fail-wins recorded and tested (delta RMO-7); [Low] RMO-21 test now proves rollback; [Low] FOR UPDATE OF self; [Low] unmatched append; Contracts settings list completed; M2M FK exception recorded in design.md.
+No re-review: no Confirmed Critical/High finding (workflow §3); fixes verified by Gate A.
+Deferred: verdict labels already present on the open event are ignored until the next update; ~4 queries per area group; blocked/failed inbox events are re-scanned each poll (production note).
+Session 3: done.

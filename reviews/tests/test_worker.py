@@ -6,7 +6,7 @@ from django.test import TransactionTestCase, override_settings
 
 from audit.models import AuditEvent
 from integrations.inbox import store_event
-from integrations.models import InboxEvent
+from integrations.models import InboxEvent, OutboxCall
 from reviews.lifecycle import handle_event as real_handle
 from reviews.models import MergeRequest, MergeRequestState, Person
 from reviews.worker import process_next_event
@@ -139,3 +139,44 @@ class WorkerTest(TransactionTestCase):
                 payload={},
             )
             self.assertFalse(process_next_event())
+
+    def test_failing_event_is_quarantined(self) -> None:
+        """RMO-21: Given an event that raises (unknown author) with a later event
+        of the same MR and an event of another MR, when the worker runs, then the
+        failed event is rolled back, marked failed, an admin alert is queued, the
+        other MR is processed, and the later event stays pending."""
+        # given
+        Person.objects.create(gitlab_user_id=1, name="Admin", is_admin=True)
+        store_open_event("u-21-1", 7, 1, 999)
+        store_event("gitlab", "u-21-2", "Push Hook", "7:1", {})
+        store_open_event("u-21-3", 7, 2, 11)
+
+        def write_then_handle(event: InboxEvent) -> None:
+            OutboxCall.objects.create(kind="marker", payload={"event": event.pk})
+            real_handle(event)
+
+        # when
+        with mock.patch("reviews.worker.handle_event", write_then_handle):
+            results = [process_next_event() for _ in range(3)]
+
+        # then
+        self.assertEqual(results, [True, True, False])
+        failed = InboxEvent.objects.get(event_uuid="u-21-1")
+        self.assertIsNotNone(failed.failed_at)
+        self.assertIsNone(failed.processed_at)
+        self.assertIn("DoesNotExist", failed.last_error)
+        self.assertFalse(MergeRequest.objects.filter(iid=1).exists())
+        self.assertTrue(MergeRequest.objects.filter(iid=2).exists())
+        self.assertIsNone(InboxEvent.objects.get(event_uuid="u-21-2").processed_at)
+        handled_event = InboxEvent.objects.get(event_uuid="u-21-3")
+        self.assertEqual(
+            list(
+                OutboxCall.objects.filter(kind="marker").values_list(
+                    "payload__event", flat=True
+                )
+            ),
+            [handled_event.pk],
+        )
+        alert = OutboxCall.objects.get(kind="notify")
+        self.assertEqual(alert.payload["gitlab_user_ids"], [1])
+        self.assertEqual(OutboxCall.objects.count(), 2)
