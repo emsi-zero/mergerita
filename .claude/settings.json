@@ -1,0 +1,5 @@
+{
+  "enabledPlugins": {
+    "craft-workflow@craft": true
+  }
+}

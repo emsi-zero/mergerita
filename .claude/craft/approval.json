@@ -1,0 +1,13 @@
+{
+  "approvals": [
+    {
+      "kind": "spec",
+      "spec": "2026-10-26-orchestrator-thin-slice-prototype",
+      "sha256": "51178d5aca0ed4c9de13047b2dd2c97767f716e51ee207f1d1e692a79c1bcb1e",
+      "approved_at": "2026-10-26T10:42:09+00:00",
+      "approved_by": "developer",
+      "note": "",
+      "session_id": null
+    }
+  ]
+}
