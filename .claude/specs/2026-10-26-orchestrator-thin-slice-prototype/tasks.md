@@ -1,6 +1,6 @@
 # TASKS: Orchestrator thin-slice prototype
 
-Spec: spec.md · Key: RMO · Route: project · State: in progress
+Spec: spec.md · Key: RMO · Route: project · State: done
 Checkpoint: `scripts/test.sh -q`
 
 ## Session 1 — Scaffold, webhook ingress, audit log
@@ -56,17 +56,17 @@ Resume: An MR with the pass label gets `AreaReview` rows (unbooked); the outbox 
 
 ## Session 4 — Booking engine, audit coverage, read API
 
-State: pending · Covers: RMO-12, RMO-13, RMO-14, RMO-15, RMO-17, RMO-19
+State: implemented, awaiting Gate B · Covers: RMO-12, RMO-13, RMO-14, RMO-15, RMO-17, RMO-19
 
-- [ ] T1 — Add `reviews` models `Leave` and `CapacityDay` (unique person+day), and the migration — RMO-12, INV-3
-- [ ] T2 — Add `reviews/booking.py` `book_area_review(area_review)`: candidates are owners of all the review's areas, with the author excluded (and checked again before save), people on leave or not working excluded; one query with ownerships. For each day from today to the horizon, lock the candidates' `CapacityDay` rows, keep those with free minutes ≥ slot, rank by `(tier, -free, open_bookings, person_id)`, book the first. Set reviewer, day and reason; increment `booked_minutes`; record audit; enqueue `set_reviewer` and `notify`. With no fit, leave it `unbooked`, record audit, enqueue an admin alert. No transaction of its own — RMO-12, RMO-13, RMO-14, RMO-15, INV-2, INV-3
-- [ ] T3 — Call `booking.book_area_review` for each new area review inside the `resolve_areas` transaction in `reviews/area_resolver.py`, and move the MR to `in_review` when every area review is booked — RMO-12
-- [ ] T4 — Confirm every state change in `lifecycle`, `area_resolver`, `booking` calls `audit.services.record` — RMO-17, INV-4
-- [ ] T5 — Register `Person`, `Leave`, `CodeArea`, `Ownership`, `MergeRequest`, `AreaReview`, `CapacityDay`, `InboxEvent`, `OutboxCall`, `AuditEvent` (read-only) in admin
-- [ ] T6 — Add `reviews/serializers.py` `serialize_merge_request(mr) -> dict` and `MergeRequestDetailView` at `GET /api/merge-requests/<id>/` with `SessionAuthentication`, `IsAdminUser`, `select_related`/`prefetch_related` — RMO-19
-- [ ] T7 — Tests in `reviews/tests/test_booking.py` (RMO-12, RMO-13, RMO-14, RMO-15), `reviews/tests/test_audit_trail.py` (RMO-17), `reviews/tests/test_api.py` (RMO-19)
+- [x] T1 — Add `reviews` models `Leave` and `CapacityDay` (unique person+day), and the migration — RMO-12, INV-3
+- [x] T2 — Add `reviews/booking.py` `book_area_review(area_review)`: candidates are owners of all the review's areas, with the author excluded (and checked again before save), people on leave or not working excluded; one query with ownerships. For each day from today to the horizon, lock the candidates' `CapacityDay` rows, keep those with free minutes ≥ slot, rank by `(tier, -free, open_bookings, person_id)`, book the first. Set reviewer, day and reason; increment `booked_minutes`; record audit; enqueue `set_reviewer` and `notify`. With no fit, leave it `unbooked`, record audit, enqueue an admin alert. No transaction of its own — RMO-12, RMO-13, RMO-14, RMO-15, INV-2, INV-3
+- [x] T3 — Call `booking.book_area_review` for each new area review inside the `resolve_areas` transaction in `reviews/area_resolver.py`, and move the MR to `in_review` when every area review is booked — RMO-12
+- [x] T4 — Confirm every state change in `lifecycle`, `area_resolver`, `booking` calls `audit.services.record` — RMO-17, INV-4
+- [x] T5 — Register `Person`, `Leave`, `CodeArea`, `Ownership`, `MergeRequest`, `AreaReview`, `CapacityDay`, `InboxEvent`, `OutboxCall`, `AuditEvent` (read-only) in admin
+- [x] T6 — Add `reviews/serializers.py` `serialize_merge_request(mr) -> dict` and `MergeRequestDetailView` at `GET /api/merge-requests/<id>/` with `SessionAuthentication`, `IsAdminUser`, `select_related`/`prefetch_related` — RMO-19
+- [x] T7 — Tests in `reviews/tests/test_booking.py` (RMO-12, RMO-13, RMO-14, RMO-15), `reviews/tests/test_audit_trail.py` (RMO-17), `reviews/tests/test_api.py` (RMO-19)
 
 Gate A: `bin/craft-spec trace --session 4` green · checkpoint green through `bin/craft-check` · pylint, isort, black green
 Gate B: `reviewer` (lenses: spec, style, query, security) · `deep-reviewer` (logic, security on INV-2, INV-3, the API permission)
 
-Resume: The full thin slice works end to end with fakes. Next: `/finish`.
+Resume: Implemented and Gate A green; booking runs inside `resolve_areas`, API at `/api/merge-requests/<id>/`, admin registered. Horizon = today plus 9 days (`range(RMO_BOOKING_HORIZON_DAYS)`). Next: Session 4 Gate B, then `/finish`.

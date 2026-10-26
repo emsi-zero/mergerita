@@ -80,6 +80,7 @@ class AreaResolverTest(TestCase):
                 # given
                 areas = (self.api, self.web)
                 AreaReview.objects.all().delete()
+                MergeRequest.objects.update(state=MergeRequestState.AWAITING_BOOKING)
                 Ownership.objects.all().delete()
                 for gitlab_user_id, indexes in owners:
                     self.own(gitlab_user_id, *(areas[i] for i in indexes))

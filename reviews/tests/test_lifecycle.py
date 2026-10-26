@@ -95,7 +95,7 @@ class LifecycleTest(TestCase):
         area_resolver.resolve_areas({"merge_request_id": merge_request.pk})
 
         # then
-        warning = OutboxCall.objects.get(kind="notify")
+        warning = OutboxCall.objects.get(kind="notify", payload__gitlab_user_ids=[11])
         self.assertEqual(warning.payload["gitlab_user_ids"], [11])
 
     def test_unmatched_or_no_files_send_merge_request_to_triage(self) -> None:

@@ -6,6 +6,7 @@ from django.db.models import Count
 
 from audit.services import record
 from integrations.adapters import Changes, get_gitlab_gateway
+from reviews import booking
 from reviews.alerts import queue_admin_alert, queue_notification
 from reviews.models import (
     AreaReview,
@@ -36,6 +37,7 @@ def resolve_areas(payload: dict) -> None:
             or merge_request.area_reviews.exists()
         ):
             return
+        booking.lock_booking()
         _resolve(merge_request, changes)
 
 
@@ -65,6 +67,7 @@ def _resolve(merge_request: MergeRequest, changes: Changes) -> None:
             f"MR {merge_request.project_id}:{merge_request.iid} has "
             f"{changes.changed_lines} changed lines, over the size limit of an area it touches.",
         )
+    booked_all = True
     for group in _group_areas(list(touched.values()), merge_request.author_id):
         area_review = AreaReview.objects.create(merge_request=merge_request)
         area_review.areas.set(group)
@@ -74,6 +77,17 @@ def _resolve(merge_request: MergeRequest, changes: Changes) -> None:
             area_review,
             None,
             {"state": area_review.state, "areas": [area.pk for area in group]},
+        )
+        booked_all = booking.book_area_review(area_review) and booked_all
+    if booked_all:
+        merge_request.state = MergeRequestState.IN_REVIEW
+        merge_request.save(update_fields=["state"])
+        record(
+            "orchestrator",
+            "mr.in_review",
+            merge_request,
+            {"state": MergeRequestState.AWAITING_BOOKING},
+            {"state": merge_request.state},
         )
 
 

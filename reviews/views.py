@@ -2,13 +2,21 @@ import hmac
 import json
 
 from django.conf import settings
+from django.db.models import Prefetch
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
+from rest_framework.authentication import SessionAuthentication
+from rest_framework.generics import RetrieveAPIView
+from rest_framework.permissions import IsAdminUser
+from rest_framework.request import Request
+from rest_framework.response import Response
 
 from integrations.inbox import store_event
 from reviews.lifecycle import MERGE_REQUEST_EVENT
+from reviews.models import AreaReview, MergeRequest
+from reviews.serializers import serialize_merge_request
 
 GITLAB_SOURCE = "gitlab"
 MAX_FIELD_LENGTH = 64  # InboxEvent.event_uuid, event_kind and mr_key
@@ -62,3 +70,21 @@ class GitLabWebhookView(View):
             return JsonResponse({"error": "header too long"}, status=400)
         store_event(GITLAB_SOURCE, event_uuid, event_kind, mr_key, payload)
         return HttpResponse(status=202)
+
+
+class MergeRequestDetailView(RetrieveAPIView):
+    """Read-only MR detail for staff: state and booking explanations."""
+
+    authentication_classes = [SessionAuthentication]
+    permission_classes = [IsAdminUser]
+    queryset = MergeRequest.objects.prefetch_related(
+        Prefetch(
+            "area_reviews",
+            queryset=AreaReview.objects.select_related("reviewer")
+            .prefetch_related("areas")
+            .order_by("id"),
+        )
+    )
+
+    def retrieve(self, request: Request, *args: object, **kwargs: object) -> Response:
+        return Response(serialize_merge_request(self.get_object()))

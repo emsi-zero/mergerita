@@ -109,3 +109,27 @@ class AreaReview(models.Model):
     booked_day = models.DateField(null=True, blank=True)
     slot_minutes = models.PositiveIntegerField(default=0)
     reason = models.TextField(blank=True, default="")
+
+
+class Leave(models.Model):
+    """A period when a person cannot review. Both dates are included."""
+
+    person = models.ForeignKey(Person, on_delete=models.DO_NOTHING, db_constraint=False)
+    start_date = models.DateField()
+    end_date = models.DateField()
+
+
+class CapacityDay(models.Model):
+    """Review minutes booked for one person on one day (INV-3)."""
+
+    person = models.ForeignKey(Person, on_delete=models.DO_NOTHING, db_constraint=False)
+    day = models.DateField()
+    budget_minutes = models.PositiveIntegerField()
+    booked_minutes = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["person", "day"], name="capacity_unique_person_day"
+            )
+        ]

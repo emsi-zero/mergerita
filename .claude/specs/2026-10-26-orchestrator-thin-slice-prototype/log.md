@@ -69,3 +69,13 @@ Fixed: [Medium] outbox batch lease + unfenced result writes → one claim at a t
 No re-review: no Confirmed Critical/High finding (workflow §3); fixes verified by Gate A.
 Deferred: verdict labels already present on the open event are ignored until the next update; ~4 queries per area group; blocked/failed inbox events are re-scanned each poll (production note).
 Session 3: done.
+
+## 2026-10-26 — Session 4 Gate A
+tests `scripts/test.sh -q` PASS (22 passed, 33 subtests) · pylint 10.00 PASS · isort PASS · black PASS · `craft-spec trace` PASS (21/21 all sessions) · makemigrations --check clean
+
+## 2026-10-26 — Session 4 Gate B
+reviewer (spec, style, query): COMMENT, Low only (+1 Medium below threshold handed to deep-reviewer). deep-reviewer (logic, security): REQUEST_CHANGES on Mediums, no Critical/High.
+Fixed: [Medium] lock-order deadlock across area groups → one `pg_advisory_xact_lock` per resolve before any CapacityDay lock (also answers the lock-scope Medium); [Medium] INV-3 concurrency test added (two threads, one slot); [Medium] domain-state admins read-only (InboxEvent keeps failed_at/last_error editable); [Low] no-op `area_review.unbooked` audit removed; [Low] non-staff 403 subtest; [Low] docstrings and typing; tier rule recorded in design.md.
+No re-review: no Confirmed Critical/High (workflow §3).
+Deferred: `CapacityDay.budget_minutes` stored but decisions use the person's current budget; "today" is UTC (`TIME_ZONE="UTC"`), wrong between 00:00 and the team's UTC offset — developer to decide the zone; partially booked MRs stay `awaiting_booking` with an admin alert, no auto re-booking (outside the slice).
+Session 4: done. Project: all sessions done.
