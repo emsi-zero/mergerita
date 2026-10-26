@@ -47,9 +47,10 @@ fakes behind adapter interfaces.
 | RMO-18 | IF code tries to update or delete an audit event, THEN THE audit model SHALL raise and leave the row unchanged. | SECURITY BOUNDARY | History is rewritten after the fact |
 | RMO-19 | WHEN an authenticated staff user requests `GET /api/merge-requests/<id>/`, THE API SHALL return the MR state and each area review with its areas, reviewer, booked day and reason; IF the user is not authenticated, THEN it SHALL reply 401 or 403. | SECURITY BOUNDARY | Booking explanations are unreadable, or internal data leaks to anonymous callers |
 | RMO-20 | IF a webhook with a valid token has a body that is not a JSON object, or a Merge Request Hook lacks `project.id` or `object_attributes.iid`, or a header value is longer than its stored field, THEN THE webhook ingress SHALL reply 400 and store no inbox event. | IMPORTANT FAILURE MODE | A malformed delivery gives a 500, and GitLab retries it forever |
+| RMO-21 | IF handling an inbox event raises, THEN THE worker SHALL roll back that event's changes, mark the event failed with the error, queue an admin alert, and go on with other MRs' events; later events of the same MR SHALL stay pending until an admin clears the failed mark. | IMPORTANT FAILURE MODE | One bad event (unknown author, bad payload) crashes the worker on every pass or silently blocks its MR |
 
 Not tested, and why:
-- Django admin forms for people, areas, ownership — FRAMEWORK BEHAVIOR
+- Django admin forms for people, areas, ownership, and clearing a failed inbox event's mark — FRAMEWORK BEHAVIOR
 - Webhook events other than merge request (push, note, pipeline) are stored and marked processed with no effect — covered by RMO-2/RMO-4 paths; no business rule
 - Fake adapters themselves — test scaffolding, not product behavior
 - Docker Compose wiring — exercised by every checkpoint run

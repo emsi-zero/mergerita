@@ -76,3 +76,41 @@ class GitLabWebhookTest(TestCase):
         self.assertEqual(first.status_code, 202)
         self.assertEqual(second.status_code, 202)
         self.assertEqual(InboxEvent.objects.count(), 1)
+
+    def test_malformed_webhook_gets_400_and_stores_nothing(self) -> None:
+        """RMO-20: Given a valid token and a malformed body or too-long header,
+        when a webhook arrives, then reply 400 and store no event."""
+        mr_headers = {"HTTP_X_GITLAB_EVENT": "Merge Request Hook"}
+        for name, body, headers in (
+            ("not_an_object", "[1, 2]", {}),
+            ("missing_project", '{"object_attributes": {"iid": 3}}', mr_headers),
+            (
+                "missing_iid",
+                '{"project": {"id": 7}, "object_attributes": {}}',
+                mr_headers,
+            ),
+            (
+                "null_project_id",
+                '{"project": {"id": null}, "object_attributes": {"iid": 3}}',
+                mr_headers,
+            ),
+            ("nan_constant", '{"x": NaN}', {}),
+            ("uuid_too_long", "{}", {"HTTP_X_GITLAB_EVENT_UUID": "u" * 65}),
+            ("event_too_long", "{}", {"HTTP_X_GITLAB_EVENT": "e" * 65}),
+        ):
+            with self.subTest(name=name):
+                # given
+                headers = {
+                    "HTTP_X_GITLAB_TOKEN": "secret",
+                    "HTTP_X_GITLAB_EVENT_UUID": "u-20",
+                    **headers,
+                }
+
+                # when
+                response = self.client.post(
+                    URL, body, content_type="application/json", **headers
+                )
+
+                # then
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(InboxEvent.objects.count(), 0)

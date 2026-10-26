@@ -34,3 +34,21 @@ Why: both Session 1 reviewers found a 500 on malformed MR hooks. Approved by the
 
 ## 2026-10-26 11:13 UTC — spec delta approved
 sha256 8772d8b728e9
+
+## 2026-10-26 — spec delta: RMO-21 poison-event quarantine
+Added RMO-21: failing event → rolled back, marked failed, admin alert, worker continues; later events of that MR wait until an admin clears it. Planned in Session 3 (T6b), because the alert needs the outbox.
+Why: Session 2 coder found an unknown author (or any handler error) leaves the event pending, so the worker crashes each pass and the MR is blocked. Approved by the developer ("Quarantine + admin alert").
+
+## 2026-10-26 11:20 UTC — spec delta approved
+sha256 40437e1411fe
+
+## 2026-10-26 — Session 2 Gate A
+tests `scripts/test.sh -q` PASS (8 passed, 10 subtests) · pylint 10.00 PASS · isort PASS · black PASS · `craft-spec trace --session 2` PASS (4/4)
+
+## 2026-10-26 — Session 2 Gate B
+reviewer (spec, style, query): APPROVE. deep-reviewer (logic, security): COMMENT, no Critical/High.
+Fixed: [Medium] RMO-6 commit-order gap (a later delivery committed before an earlier one) → claim only events older than `RMO_INBOX_CLAIM_GRACE_SECONDS` (2 s), asserted in the RMO-6 test. [Low] non-integer/null project.id or iid → 400. [Low] NaN/Infinity and deep nesting → 400.
+Deferred to Session 3: [Medium, conf 0.5] partial index on pending `id` for the claim's outer ORDER BY (planned in T6b). Poison events (RMO-21, T6b).
+Deferred: NUL / lone-surrogate JSON strings still give a 500 from jsonb (GitLab does not send them). Low style notes (docstrings on Command, `dict[str, object]`, length 64 copied from the model).
+Note: `run_worker --once` leaves events younger than the grace pending.
+Session 2: done.

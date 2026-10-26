@@ -22,14 +22,14 @@ Resume: Done. Run tests with `scripts/test.sh -q` (host .venv + postgres:14 over
 
 ## Session 2 — Worker and MR lifecycle intake
 
-State: pending · Covers: RMO-4, RMO-5, RMO-6, RMO-20
+State: done · Covers: RMO-4, RMO-5, RMO-6, RMO-20
 
-- [ ] T1 — Add `reviews/models.py` `Person`, `MergeRequest` with `MergeRequestState` `TextChoices`, and the migration — RMO-4
-- [ ] T2 — Add `reviews/lifecycle.py` `handle_event(event)`: dispatch on `event_kind`; merge-request `open` for an unknown MR creates it in `awaiting_ai_review` (author looked up by GitLab user id) and calls `audit.services.record`; other kinds and unknown actions are no-ops. It opens no transaction of its own — RMO-4, INV-4
-- [ ] T3 — Add `reviews/worker.py` `process_next_event() -> bool`: inside one `with transaction.atomic()`, claim the oldest pending event that is the minimum pending id for its `mr_key` (or has no `mr_key`) with `select_for_update(skip_locked=True)`, call `lifecycle.handle_event`, set `processed_at`. Log with the `mr_key` — RMO-5, RMO-6, INV-1
-- [ ] T4 — Add `reviews/management/commands/run_worker.py`: loops `process_next_event` (and, from Session 3, the outbox dispatcher), sleeps when idle; `--once` drains and exits — contracts
-- [ ] T5 — Tests in `reviews/tests/test_worker.py` for RMO-4, RMO-5 (`TransactionTestCase`, two threads), RMO-6
-- [ ] T6 — In `reviews/views.py` `GitLabWebhookView`, reply 400 and store nothing when the body is not a JSON object, a Merge Request Hook lacks `project.id` or `object_attributes.iid`, or `X-Gitlab-Event-UUID` / `X-Gitlab-Event` / the derived `mr_key` exceed their field lengths; test RMO-20 in `reviews/tests/test_webhook.py` — RMO-20
+- [x] T1 — Add `reviews/models.py` `Person`, `MergeRequest` with `MergeRequestState` `TextChoices`, and the migration — RMO-4
+- [x] T2 — Add `reviews/lifecycle.py` `handle_event(event)`: dispatch on `event_kind`; merge-request `open` for an unknown MR creates it in `awaiting_ai_review` (author looked up by GitLab user id) and calls `audit.services.record`; other kinds and unknown actions are no-ops. It opens no transaction of its own — RMO-4, INV-4
+- [x] T3 — Add `reviews/worker.py` `process_next_event() -> bool`: inside one `with transaction.atomic()`, claim the oldest pending event that is the minimum pending id for its `mr_key` (or has no `mr_key`) with `select_for_update(skip_locked=True)`, call `lifecycle.handle_event`, set `processed_at`. Log with the `mr_key` — RMO-5, RMO-6, INV-1
+- [x] T4 — Add `reviews/management/commands/run_worker.py`: loops `process_next_event` (and, from Session 3, the outbox dispatcher), sleeps when idle; `--once` drains and exits — contracts
+- [x] T5 — Tests in `reviews/tests/test_worker.py` for RMO-4, RMO-5 (`TransactionTestCase`, two threads), RMO-6
+- [x] T6 — In `reviews/views.py` `GitLabWebhookView`, reply 400 and store nothing when the body is not a JSON object, a Merge Request Hook lacks `project.id` or `object_attributes.iid`, or `X-Gitlab-Event-UUID` / `X-Gitlab-Event` / the derived `mr_key` exceed their field lengths; test RMO-20 in `reviews/tests/test_webhook.py` — RMO-20
 
 Gate A: `bin/craft-spec trace --session 2` green · checkpoint green through `bin/craft-check` · pylint, isort, black green
 Gate B: `reviewer` (lenses: spec, style, query) · `deep-reviewer` (logic on INV-1, INV-4 and the claim query)
@@ -38,7 +38,7 @@ Resume: `run_worker --once` turns stored MR `open` events into `MergeRequest` ro
 
 ## Session 3 — Outbox, adapters, AI gate and area resolver
 
-State: pending · Covers: RMO-7, RMO-8, RMO-9, RMO-10, RMO-11, RMO-16
+State: pending · Covers: RMO-7, RMO-8, RMO-9, RMO-10, RMO-11, RMO-16, RMO-21
 
 - [ ] T1 — Add `integrations/models.py` `OutboxCall` with `OutboxStatus` `TextChoices`, and the migration; add `reviews` models `CodeArea`, `Ownership` (`OwnerRole`), `AreaReview` (`AreaReviewState`) with M2M `areas`, and the migration — RMO-7, RMO-9, RMO-16
 - [ ] T2 — Add `integrations/adapters.py` `GitLabGatewayInterface` (`get_changes`, `set_reviewer`, `post_note`) and `NotifierInterface` (`notify`) as `Protocol`s, a `get_gitlab_gateway()` / `get_notifier()` loader from settings dotted paths, and `integrations/fakes.py` in-memory fakes that record calls and return seeded changes — RMO-7, RMO-16
@@ -46,6 +46,7 @@ State: pending · Covers: RMO-7, RMO-8, RMO-9, RMO-10, RMO-11, RMO-16
 - [ ] T4 — Extend `reviews/lifecycle.py`: merge-request `update` events apply labels. Pass label in `awaiting_ai_review` → state `awaiting_booking`, audit, enqueue `resolve_areas`. Fail label → `waiting_on_author`, audit — RMO-7, RMO-17 (audit write; tested in S4)
 - [ ] T5 — Add `reviews/area_resolver.py` and register handlers in `reviews/apps.py` `ready()`. The `resolve_areas` handler calls `get_changes` outside a transaction, then in one `atomic` block: locks the MR, returns if area reviews already exist, matches files to areas by glob, applies the policy (`strict`, or `combined` with fallback), creates `AreaReview` rows as `unbooked`, enqueues one size warning to the author when changed lines exceed any touched area's limit, and moves to `needs_triage` with an admin alert when a file matches no area. Also registers `set_reviewer` and `notify` handlers that call the adapters — RMO-7, RMO-8, RMO-9, RMO-10, RMO-11
 - [ ] T6 — Wire `outbox.dispatch_due` into `run_worker`
+- [ ] T6b — Add `failed_at` and `last_error` to `InboxEvent`, plus the partial index on `id` where `processed_at IS NULL` (Session 2 review), in one `integrations` migration together with `OutboxCall`. In `reviews/worker.py`, when `handle_event` raises, let the event's `atomic` block roll back, then in a second short transaction mark the event failed and enqueue an admin alert. Claim only events with `failed_at IS NULL`, but keep failed events in the oldest-of-MR subquery so later events of that MR wait. Test RMO-21 in `reviews/tests/test_worker.py` (unknown author) — RMO-21
 - [ ] T7 — Tests in `reviews/tests/test_lifecycle.py` (RMO-7, RMO-8, RMO-11), `reviews/tests/test_area_resolver.py` (RMO-9, RMO-10), `integrations/tests/test_outbox.py` (RMO-16)
 
 Gate A: `bin/craft-spec trace --session 3` green · checkpoint green through `bin/craft-check` · pylint, isort, black green

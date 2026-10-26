@@ -8,9 +8,31 @@ from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 
 from integrations.inbox import store_event
+from reviews.lifecycle import MERGE_REQUEST_EVENT
 
 GITLAB_SOURCE = "gitlab"
-MERGE_REQUEST_EVENT = "Merge Request Hook"
+MAX_FIELD_LENGTH = 64  # InboxEvent.event_uuid, event_kind and mr_key
+
+
+def _derive_mr_key(event_kind: str, payload: object) -> str | None:
+    """Return "<project_id>:<iid>" for a merge-request event, else None.
+
+    Raise ValueError, KeyError or TypeError when the payload is malformed.
+    """
+    if not isinstance(payload, dict):
+        raise ValueError("payload is not a JSON object")
+    if event_kind != MERGE_REQUEST_EVENT:
+        return None
+    project_id = payload["project"]["id"]
+    iid = payload["object_attributes"]["iid"]
+    for value in (project_id, iid):
+        if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+            raise ValueError("project.id and iid must be positive integers")
+    return f"{project_id}:{iid}"
+
+
+def _reject_constant(name: str) -> None:
+    raise ValueError(f"{name} is not valid JSON")
 
 
 @method_decorator(csrf_exempt, name="dispatch")
@@ -26,14 +48,17 @@ class GitLabWebhookView(View):
         event_uuid = request.headers.get("X-Gitlab-Event-UUID")
         if not event_uuid:
             return JsonResponse({"error": "missing event uuid"}, status=400)
-        try:
-            payload = json.loads(request.body)
-        except ValueError:
-            return JsonResponse({"error": "invalid json"}, status=400)
-
         event_kind = request.headers.get("X-Gitlab-Event", "")
-        mr_key = None
-        if event_kind == MERGE_REQUEST_EVENT:
-            mr_key = f"{payload['project']['id']}:{payload['object_attributes']['iid']}"
+        try:
+            payload = json.loads(request.body, parse_constant=_reject_constant)
+            mr_key = _derive_mr_key(event_kind, payload)
+        except (ValueError, KeyError, TypeError, RecursionError):
+            return JsonResponse({"error": "malformed webhook"}, status=400)
+        if (
+            len(event_uuid) > MAX_FIELD_LENGTH
+            or len(event_kind) > MAX_FIELD_LENGTH
+            or (mr_key is not None and len(mr_key) > MAX_FIELD_LENGTH)
+        ):
+            return JsonResponse({"error": "header too long"}, status=400)
         store_event(GITLAB_SOURCE, event_uuid, event_kind, mr_key, payload)
         return HttpResponse(status=202)

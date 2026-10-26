@@ -82,6 +82,10 @@ RMO_COVERAGE_POLICY = "strict"  # "strict" or "combined"
 # Weekday numbers follow datetime.weekday(): Monday is 0. Saturday to Wednesday.
 RMO_DEFAULT_WORKING_DAYS = [5, 6, 0, 1, 2]
 
+# Inbox. A delivery younger than this is not claimed yet, so an earlier
+# delivery still committing is not overtaken (RMO-6).
+RMO_INBOX_CLAIM_GRACE_SECONDS = 2
+
 # Outbox.
 RMO_OUTBOX_MAX_ATTEMPTS = 5
 RMO_OUTBOX_BACKOFF_SECONDS = 30

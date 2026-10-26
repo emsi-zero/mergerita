@@ -26,6 +26,15 @@
       "approved_by": "developer",
       "note": "",
       "session_id": null
+    },
+    {
+      "kind": "spec",
+      "spec": "2026-10-26-orchestrator-thin-slice-prototype",
+      "sha256": "40437e1411fe7423c0af0282ba25806a4585e7f92a3ee1dd4af42083ca5279dc",
+      "approved_at": "2026-10-26T11:20:01+00:00",
+      "approved_by": "developer",
+      "note": "",
+      "session_id": null
     }
   ]
 }
