@@ -46,6 +46,7 @@ fakes behind adapter interfaces.
 | RMO-17 | WHEN an MR or area review changes state, or a booking is made, THE domain layer SHALL write one audit event with the actor, the action, the subject, and the before and after values. | CRITICAL BEHAVIOR | A state change cannot be audited |
 | RMO-18 | IF code tries to update or delete an audit event, THEN THE audit model SHALL raise and leave the row unchanged. | SECURITY BOUNDARY | History is rewritten after the fact |
 | RMO-19 | WHEN an authenticated staff user requests `GET /api/merge-requests/<id>/`, THE API SHALL return the MR state and each area review with its areas, reviewer, booked day and reason; IF the user is not authenticated, THEN it SHALL reply 401 or 403. | SECURITY BOUNDARY | Booking explanations are unreadable, or internal data leaks to anonymous callers |
+| RMO-20 | IF a webhook with a valid token has a body that is not a JSON object, or a Merge Request Hook lacks `project.id` or `object_attributes.iid`, or a header value is longer than its stored field, THEN THE webhook ingress SHALL reply 400 and store no inbox event. | IMPORTANT FAILURE MODE | A malformed delivery gives a 500, and GitLab retries it forever |
 
 Not tested, and why:
 - Django admin forms for people, areas, ownership — FRAMEWORK BEHAVIOR
@@ -64,7 +65,7 @@ Not tested, and why:
 
 ## Contracts
 
-- `POST /webhooks/gitlab/` — new. Accepts GitLab webhook JSON. Headers: `X-Gitlab-Token`, `X-Gitlab-Event`, `X-Gitlab-Event-UUID`. Returns 202 or 401.
+- `POST /webhooks/gitlab/` — new. Accepts GitLab webhook JSON. Headers: `X-Gitlab-Token`, `X-Gitlab-Event`, `X-Gitlab-Event-UUID`. Returns 202, 400 (malformed body or headers, RMO-20; missing event UUID) or 401.
 - `GET /api/merge-requests/<id>/` — new, read-only, staff only.
 - Settings keys: `GITLAB_WEBHOOK_TOKEN` (from environment), `RMO_SLOT_MINUTES`, `RMO_DEFAULT_DAILY_BUDGET_MINUTES`, `RMO_BOOKING_HORIZON_DAYS`, `RMO_AI_PASS_LABEL`, `RMO_AI_FAIL_LABEL`, `RMO_COVERAGE_POLICY`, `RMO_OUTBOX_MAX_ATTEMPTS`.
 - Management commands: `run_worker` (processes the inbox, then dispatches the outbox, in a loop or once with `--once`).
@@ -73,7 +74,7 @@ Not tested, and why:
 
 - Webhook token — REQUIRED — checked in the ingress view with a constant-time compare.
 - Event UUID present — REQUIRED — ingress rejects with 400 when it is absent, since idempotency depends on it.
-- Payload shape — NOT ADDED beyond the fields the lifecycle reads. Unknown event kinds are stored and ignored.
+- Payload shape — REQUIRED only for the fields ingress reads (body is a JSON object; MR hook has `project.id`, `object_attributes.iid`) and header lengths (RMO-20). Nothing else is checked. Unknown event kinds are stored and ignored.
 - Author ≠ reviewer — REQUIRED — booking engine (INV-2).
 
 ## Standards that apply
@@ -82,7 +83,7 @@ Not tested, and why:
 - django_standards: Configuration and business constants, Django logic and style
 - implementation_standards: Tests, Tests are DAMP, not DRY
 - technical_standards: TS-5 (N+1), TS-6 (long-running worker connection handling)
-- Checkpoint: `docker compose run --rm web pytest -q`
+- Checkpoint: `scripts/test.sh -q`
 
 ## Open questions
 

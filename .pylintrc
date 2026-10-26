@@ -1,0 +1,7 @@
+[MASTER]
+load-plugins=pylint_django
+django-settings-module=orchestrator.settings
+ignore=migrations
+
+[MESSAGES CONTROL]
+disable=missing-module-docstring,missing-class-docstring,missing-function-docstring

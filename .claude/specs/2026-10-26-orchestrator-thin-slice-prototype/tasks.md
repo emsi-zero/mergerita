@@ -1,34 +1,35 @@
 # TASKS: Orchestrator thin-slice prototype
 
-Spec: spec.md · Key: RMO · Route: project · State: pending
-Checkpoint: `docker compose run --rm web pytest -q`
+Spec: spec.md · Key: RMO · Route: project · State: in progress
+Checkpoint: `scripts/test.sh -q`
 
 ## Session 1 — Scaffold, webhook ingress, audit log
 
-State: pending · Covers: RMO-1, RMO-2, RMO-3, RMO-18
+State: done · Covers: RMO-1, RMO-2, RMO-3, RMO-18
 
-- [ ] T1 — Add `requirements.txt` (Django 5.2, djangorestframework, psycopg[binary], pytest, pytest-django, black, isort, pylint, pylint-django), `Dockerfile`, `docker-compose.yml` (services `db` postgres:16 and `web`), `pytest.ini`, `pyproject.toml` (black, isort profile black), `.pylintrc`, `.gitignore`, `manage.py` — tooling for Gate A
-- [ ] T2 — Create the `orchestrator/` project: `settings.py` reads the environment only here (`DATABASE_URL` parts, `GITLAB_WEBHOOK_TOKEN`) and defines every `RMO_*` setting from the spec contracts, plus `RMO_OUTBOX_BACKOFF_SECONDS` and `RMO_DEFAULT_WORKING_DAYS`; `urls.py` — contracts
-- [ ] T3 — Add the `integrations` app with the `InboxEvent` model, its unique constraint on (`source`, `event_uuid`), the partial index on (`mr_key`, `id`), and its migration — RMO-2, RMO-3, INV-1
-- [ ] T4 — Add `integrations/inbox.py` `store_event(source, event_uuid, event_kind, mr_key, payload) -> bool` using an insert that ignores the unique conflict — RMO-2, RMO-3
-- [ ] T5 — Add the `reviews` app and `reviews/views.py` `GitLabWebhookView` at `POST /webhooks/gitlab/`: constant-time token compare → 401; missing `X-Gitlab-Event-UUID` → 400; derive `mr_key` from `project.id` and `object_attributes.iid` for merge-request events; call `store_event`; reply 202 — RMO-1, RMO-2, RMO-3
-- [ ] T6 — Add the `audit` app with `AuditEvent` (save refuses updates; `delete` and queryset `update`/`delete` raise), its migration, and `audit/services.py` `record(actor, action, subject, before, after)` — RMO-18, INV-6
-- [ ] T7 — Tests in `reviews/tests/test_webhook.py` for RMO-1, RMO-2, RMO-3, and in `audit/tests/test_audit.py` for RMO-18
+- [x] T1 — Add `requirements.txt` (Django 5.2, djangorestframework, psycopg[binary], pytest, pytest-django, black, isort, pylint, pylint-django), `Dockerfile`, `docker-compose.yml` (services `db` postgres:16 and `web`), `pytest.ini`, `pyproject.toml` (black, isort profile black), `.pylintrc`, `.gitignore`, `manage.py` — tooling for Gate A
+- [x] T2 — Create the `orchestrator/` project: `settings.py` reads the environment only here (`DATABASE_URL` parts, `GITLAB_WEBHOOK_TOKEN`) and defines every `RMO_*` setting from the spec contracts, plus `RMO_OUTBOX_BACKOFF_SECONDS` and `RMO_DEFAULT_WORKING_DAYS`; `urls.py` — contracts
+- [x] T3 — Add the `integrations` app with the `InboxEvent` model, its unique constraint on (`source`, `event_uuid`), the partial index on (`mr_key`, `id`), and its migration — RMO-2, RMO-3, INV-1
+- [x] T4 — Add `integrations/inbox.py` `store_event(source, event_uuid, event_kind, mr_key, payload) -> bool` using an insert that ignores the unique conflict — RMO-2, RMO-3
+- [x] T5 — Add the `reviews` app and `reviews/views.py` `GitLabWebhookView` at `POST /webhooks/gitlab/`: constant-time token compare → 401; missing `X-Gitlab-Event-UUID` → 400; derive `mr_key` from `project.id` and `object_attributes.iid` for merge-request events; call `store_event`; reply 202 — RMO-1, RMO-2, RMO-3
+- [x] T6 — Add the `audit` app with `AuditEvent` (save refuses updates; `delete` and queryset `update`/`delete` raise), its migration, and `audit/services.py` `record(actor, action, subject, before, after)` — RMO-18, INV-6
+- [x] T7 — Tests in `reviews/tests/test_webhook.py` for RMO-1, RMO-2, RMO-3, and in `audit/tests/test_audit.py` for RMO-18
 
 Gate A: `bin/craft-spec trace --session 1` green · checkpoint green through `bin/craft-check` · pylint, isort, black green
 Gate B: `reviewer` (lenses: spec, style, security, query) · `deep-reviewer` (logic, security on INV-1, INV-6, token check)
 
-Resume: Compose stack builds; `POST /webhooks/gitlab/` stores inbox rows; `audit.services.record` exists. Next: Session 2, the worker and MR lifecycle.
+Resume: Done. Run tests with `scripts/test.sh -q` (host .venv + postgres:14 over a unix socket in .pgsock/; set DEBUG=1 for manage.py and pylint). Docker files are kept but unbuilt (registry 403). `POST /webhooks/gitlab/` stores inbox rows; `audit.services.record` exists. Next: Session 2, the worker and MR lifecycle.
 
 ## Session 2 — Worker and MR lifecycle intake
 
-State: pending · Covers: RMO-4, RMO-5, RMO-6
+State: pending · Covers: RMO-4, RMO-5, RMO-6, RMO-20
 
 - [ ] T1 — Add `reviews/models.py` `Person`, `MergeRequest` with `MergeRequestState` `TextChoices`, and the migration — RMO-4
 - [ ] T2 — Add `reviews/lifecycle.py` `handle_event(event)`: dispatch on `event_kind`; merge-request `open` for an unknown MR creates it in `awaiting_ai_review` (author looked up by GitLab user id) and calls `audit.services.record`; other kinds and unknown actions are no-ops. It opens no transaction of its own — RMO-4, INV-4
 - [ ] T3 — Add `reviews/worker.py` `process_next_event() -> bool`: inside one `with transaction.atomic()`, claim the oldest pending event that is the minimum pending id for its `mr_key` (or has no `mr_key`) with `select_for_update(skip_locked=True)`, call `lifecycle.handle_event`, set `processed_at`. Log with the `mr_key` — RMO-5, RMO-6, INV-1
 - [ ] T4 — Add `reviews/management/commands/run_worker.py`: loops `process_next_event` (and, from Session 3, the outbox dispatcher), sleeps when idle; `--once` drains and exits — contracts
 - [ ] T5 — Tests in `reviews/tests/test_worker.py` for RMO-4, RMO-5 (`TransactionTestCase`, two threads), RMO-6
+- [ ] T6 — In `reviews/views.py` `GitLabWebhookView`, reply 400 and store nothing when the body is not a JSON object, a Merge Request Hook lacks `project.id` or `object_attributes.iid`, or `X-Gitlab-Event-UUID` / `X-Gitlab-Event` / the derived `mr_key` exceed their field lengths; test RMO-20 in `reviews/tests/test_webhook.py` — RMO-20
 
 Gate A: `bin/craft-spec trace --session 2` green · checkpoint green through `bin/craft-check` · pylint, isort, black green
 Gate B: `reviewer` (lenses: spec, style, query) · `deep-reviewer` (logic on INV-1, INV-4 and the claim query)
