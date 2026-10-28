@@ -1,0 +1,38 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Developer panel</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'panel/panel.css' %}">
+</head>
+<body>
+<header class="top">
+  <div class="top-inner">
+    <div class="brand">
+      <div class="logo">RM</div>
+      <div class="brand-name">Review &amp; Merge</div>
+      <div class="muted">Developer panel</div>
+    </div>
+    {% if user.is_authenticated %}
+    <nav aria-label="Sections" class="tabs">
+      <a href="{% url 'panel:mrs' %}" class="tab on">My MRs</a>
+    </nav>
+    <div class="who">
+      <div class="avatar">{{ user.username|slice:":2"|upper }}</div>
+      <div class="who-name">{{ user.username }}</div>
+      <form method="post" action="{% url 'logout' %}">
+        {% csrf_token %}
+        <button type="submit" class="link">Sign out</button>
+      </form>
+    </div>
+    {% endif %}
+  </div>
+</header>
+<main>
+{% block content %}{% endblock %}
+</main>
+</body>
+</html>

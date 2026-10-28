@@ -15,6 +15,14 @@ class Person(models.Model):
     working_days = models.JSONField(default=default_working_days)
     daily_budget_minutes = models.PositiveIntegerField(null=True, blank=True)
     is_admin = models.BooleanField(default=False)
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.DO_NOTHING,
+        db_constraint=False,
+        related_name="person",
+    )
 
 
 class MergeRequestState(models.TextChoices):  # pylint: disable=too-many-ancestors

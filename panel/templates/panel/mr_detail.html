@@ -1,0 +1,41 @@
+{% extends "panel/base.html" %}
+{% block content %}
+<section class="card detail">
+  <div class="row">
+    <span class="mono muted">!{{ merge_request.iid }}</span>
+    <h1 class="grow">{{ merge_request.title }}</h1>
+    <span class="badge {{ merge_request.badge_class }}">{{ merge_request.badge }}</span>
+  </div>
+  <div class="muted">Opened {{ merge_request.opened_at|date:"D j M" }} · {{ merge_request.changed_lines }} changed lines</div>
+
+  <div class="next {{ merge_request.badge_class }}">
+    <div class="next-title">{{ next_title }}</div>
+    <div>{{ next_text }}</div>
+  </div>
+
+  {% if size_warning %}
+  <div class="warning" role="alert">{{ size_warning }}</div>
+  {% endif %}
+
+  <h3>Area reviews</h3>
+  {% for review in area_reviews %}
+  <div class="review">
+    <div class="row">
+      {% for area in review.areas.all %}<span class="mono chip">{{ area.name }}</span>{% endfor %}
+      <span class="grow strong">{% if review.reviewer %}{{ review.reviewer.name }}{% else %}Not booked{% endif %}</span>
+      <span class="day {% if review.booked_day %}ok{% else %}pending{% endif %}">{% if review.booked_day %}{{ review.booked_day|date:"D j M" }}{% else %}Unbooked{% endif %}</span>
+    </div>
+    <div class="muted small"><span class="strong">Why: </span>{{ review.reason }}</div>
+  </div>
+  {% empty %}
+  <div class="muted small">No area reviews yet. They are created when the AI Reviewer approves.</div>
+  {% endfor %}
+
+  <h3>History</h3>
+  <ol class="history">
+    {% for at, text in history %}
+    <li><span class="mono muted when">{{ at|date:"j M H:i" }}</span><span>{{ text }}</span></li>
+    {% endfor %}
+  </ol>
+</section>
+{% endblock %}

@@ -44,6 +44,24 @@
       "approved_by": "developer",
       "note": "",
       "session_id": null
+    },
+    {
+      "kind": "spec",
+      "spec": "2026-10-26-gitlab-integration",
+      "sha256": "a3ef55d1745d56f645ac2da3bf29584c70b4d5346b9cd4a157ad03629d9aa92d",
+      "approved_at": "2026-10-26T13:24:42+00:00",
+      "approved_by": "developer",
+      "note": "",
+      "session_id": null
+    },
+    {
+      "kind": "spec",
+      "spec": "2026-10-28-developer-panel",
+      "sha256": "7041610f73bab0f5e4ea7f0ec80431049b11d4288b0694e2463f53860ce1140e",
+      "approved_at": "2026-10-28T12:30:27+00:00",
+      "approved_by": "developer",
+      "note": "",
+      "session_id": null
     }
   ]
 }

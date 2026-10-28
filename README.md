@@ -32,3 +32,7 @@ export DEBUG=1 GITLAB_WEBHOOK_TOKEN=dev-token DB_HOST=$PWD/.pgsock
 In admin, enter people, code areas (glob path patterns) and ownership. Then send a GitLab `Merge Request Hook`, first with `action: open`, then with `action: update` and the label `ai-review::passed`. Limit: the fake gateway keeps its seeded changes in memory, and only tests can seed it. So in a manual run, every MR has no changed files and goes to `needs_triage`. The full path through booking is shown by the tests, for example `reviews/tests/test_audit_trail.py`. A manual demo needs a real or file-backed `RMO_GITLAB_GATEWAY`.
 
 Pylint and `manage.py` need `DEBUG=1`. When DEBUG is off, settings require `SECRET_KEY`.
+
+## Developer panel
+
+Developers sign in at `/accounts/login/` and use `/panel/`. An admin links each Django user to a Person in the admin (Person → User). The password login has no attempt limit, so run the panel only inside the company network until GitLab SSO replaces it.

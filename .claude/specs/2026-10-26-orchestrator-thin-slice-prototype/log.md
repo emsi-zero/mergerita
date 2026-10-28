@@ -79,3 +79,6 @@ Fixed: [Medium] lock-order deadlock across area groups → one `pg_advisory_xact
 No re-review: no Confirmed Critical/High (workflow §3).
 Deferred: `CapacityDay.budget_minutes` stored but decisions use the person's current budget; "today" is UTC (`TIME_ZONE="UTC"`), wrong between 00:00 and the team's UTC offset — developer to decide the zone; partially booked MRs stay `awaiting_booking` with an admin alert, no auto re-booking (outside the slice).
 Session 4: done. Project: all sessions done.
+
+## 2026-10-26 13:03 UTC — spec closed
+Session archived: /home/tabdeal/side-projects/merge-orchestrator/.claude/craft/archive/session-20261026T130347+0000.json

@@ -20,6 +20,7 @@ INSTALLED_APPS = [
     "integrations",
     "audit",
     "reviews",
+    "panel",
 ]
 
 MIDDLEWARE = [
@@ -63,6 +64,8 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 USE_TZ = True
 TIME_ZONE = "UTC"
 STATIC_URL = "static/"
+LOGIN_URL = "/accounts/login/"
+LOGIN_REDIRECT_URL = "/panel/"
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
@@ -77,6 +80,7 @@ GITLAB_WEBHOOK_TOKEN = os.environ.get("GITLAB_WEBHOOK_TOKEN", "")
 RMO_SLOT_MINUTES = 60
 RMO_DEFAULT_DAILY_BUDGET_MINUTES = 120
 RMO_BOOKING_HORIZON_DAYS = 10
+RMO_DAILY_BUDGET_CHOICES = [60, 120, 180, 240]
 RMO_AI_PASS_LABEL = "ai-review::passed"
 RMO_AI_FAIL_LABEL = "ai-review::failed"
 RMO_COVERAGE_POLICY = "strict"  # "strict" or "combined"

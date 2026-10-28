@@ -37,6 +37,11 @@ class AuditEvent(models.Model):
 
     class Meta:
         base_manager_name = "objects"
+        indexes = [
+            models.Index(
+                fields=["subject_type", "subject_id"], name="audit_subject_idx"
+            )
+        ]
 
     def save(self, *args: object, **kwargs: object) -> None:
         if self.pk is not None:

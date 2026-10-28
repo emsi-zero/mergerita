@@ -1,0 +1,8 @@
+{
+  "started_at": "2026-10-26T13:03:47+00:00",
+  "checks": [],
+  "route": "project",
+  "checkpoint_command": "scripts/test.sh -q",
+  "spec": "2026-10-26-gitlab-integration",
+  "updated_at": "2026-10-26T13:03:47+00:00"
+}

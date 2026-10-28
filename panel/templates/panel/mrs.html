@@ -1,0 +1,21 @@
+{% extends "panel/base.html" %}
+{% block content %}
+<div class="page-head">
+  <h1>My merge requests</h1>
+  <div class="muted">{{ merge_requests|length }} merge requests</div>
+</div>
+<div class="stack">
+  {% for mr in merge_requests %}
+  <a class="card mr-card" href="{% url 'panel:mr-detail' mr.pk %}">
+    <div class="row">
+      <span class="mono muted">!{{ mr.iid }}</span>
+      <span class="mr-title">{{ mr.title }}</span>
+      <span class="badge {{ mr.badge_class }}">{{ mr.badge }}</span>
+    </div>
+    <div class="muted small">{{ mr.summary }}</div>
+  </a>
+  {% empty %}
+  <div class="muted">You have no merge requests.</div>
+  {% endfor %}
+</div>
+{% endblock %}
