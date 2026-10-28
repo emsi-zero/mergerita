@@ -78,3 +78,26 @@ main { max-width: 1240px; margin: 0 auto; padding: 24px; }
 .login label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--text-2); }
 .login input { padding: 9px 10px; border: 1px solid var(--border-strong); border-radius: 7px; font: inherit; }
 .primary { padding: 10px 14px; border-radius: 8px; border: none; background: var(--primary); color: var(--on-primary); font-weight: 500; cursor: pointer; }
+h2 { margin: 0; font-size: 16px; font-weight: 700; }
+.lead { margin: 6px 0 18px; max-width: 640px; line-height: 1.5; }
+.tight { gap: 8px; }
+.day-head { margin-bottom: 12px; }
+.bar { width: 200px; height: 8px; accent-color: var(--primary); }
+.bar.over { accent-color: var(--bad-fg); }
+.messages { list-style: none; margin: 0 0 16px; padding: 0; }
+.notice-ok { padding: 10px 12px; border-radius: 8px; background: var(--ok-bg); color: var(--ok-fg); }
+.columns { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
+.columns > .card { flex: 1 1 380px; min-width: 0; padding: 20px; }
+.columns form { margin-bottom: 24px; }
+.columns form .primary { margin-top: 14px; }
+.pills { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.pill input { position: absolute; opacity: 0; }
+.pill span { display: inline-block; padding: 10px 14px; min-width: 56px; box-sizing: border-box; text-align: center; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text-2); font-weight: 500; cursor: pointer; }
+.pill input:checked + span { background: var(--primary); border-color: var(--primary-border); color: var(--on-primary); }
+.pill input:focus-visible + span { outline: 2px solid var(--link); outline-offset: 2px; }
+.leave { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+.remove { padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--bad-fg); cursor: pointer; }
+.dates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+.dates label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--text-2); }
+.dates input { padding: 9px 10px; border: 1px solid var(--border-strong); border-radius: 7px; font: inherit; }
+.errorlist { margin: 8px 0 0; padding: 0; list-style: none; color: var(--bad-fg); font-size: 13px; }

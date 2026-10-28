@@ -19,3 +19,13 @@ Decision (developer): login has no attempt limit — accepted; the panel runs on
 Deferred: Google Fonts loaded from the client (internal tool, offline falls back to system fonts); `Person.user` left dangling if a Django user is deleted (DO_NOTHING by standard); view attributes set on model instances (refactor not shorter).
 No re-review: no Confirmed Critical/High.
 Session 1: done.
+
+## 2026-10-28 — Session 2 Gate A
+tests `scripts/test.sh -q` PASS (32 passed, 60 subtests) · pylint 10.00 PASS · isort PASS · black PASS · `craft-spec trace` PASS (10/10 all sessions)
+
+## 2026-10-28 — Session 2 Gate B
+reviewer (spec, style, query): COMMENT, no Critical/High. deep-reviewer (logic, security): COMMENT, no Critical/High.
+Fixed: [Medium] POST endpoints had no anonymous/unlinked access tests → subTests in DVP-1/DVP-2 assert redirect/403 and no change; [Medium] budget rule duplicated → `reviews.booking.person_budget` shared; [Medium] hardcoded team default days → built from `default_working_days()`; [Low] My reviews showed the budget stored at booking time → live budget, no-row day tested; [Low] full day shown as over → only `booked > budget`; [Low] audit `before` read outside the lock → `select_for_update` re-read; [Low] concurrent leave deletes → `select_for_update`; [Low] docstrings.
+Accepted (reviewer judged, spec-consistent): only days with bookings listed; past leave listed; mockup handover notice dropped (non-goal); tests share builders from test_merge_requests.py.
+No re-review: no Confirmed Critical/High.
+Session 2: done. Project: all sessions done.

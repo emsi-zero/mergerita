@@ -1,13 +1,29 @@
-from datetime import datetime
+from datetime import date, datetime, timedelta
 
+from django import forms
+from django.conf import settings
+from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Prefetch, Q, QuerySet
-from django.http import HttpRequest, HttpResponse
-from django.shortcuts import render
-from django.views.generic import DetailView, ListView, RedirectView
+from django.http import Http404, HttpRequest, HttpResponse
+from django.shortcuts import redirect, render
+from django.utils import timezone
+from django.views.generic import DetailView, ListView, RedirectView, TemplateView, View
 
 from audit.models import AuditEvent
-from reviews.models import AreaReview, MergeRequest, MergeRequestState, Person
+from panel.forms import WEEKDAY_NAMES, BudgetForm, LeaveForm, WorkingDaysForm
+from reviews import availability
+from reviews.booking import person_budget
+from reviews.models import (
+    AreaReview,
+    AreaReviewState,
+    CapacityDay,
+    Leave,
+    MergeRequest,
+    MergeRequestState,
+    Person,
+    default_working_days,
+)
 
 # Badge label and CSS class per MR state (copied from the mockup).
 STATE_BADGES = {
@@ -143,6 +159,156 @@ class MergeRequestDetailPanelView(PanelAccessMixin, DetailView):
         context["size_warning"] = _size_warning(merge_request, area_reviews)
         context["history"] = _history(merge_request, area_reviews)
         return context
+
+
+class MyReviewsView(PanelAccessMixin, TemplateView):
+    """Show the area reviews booked to the developer, grouped by day (DVP-6)."""
+
+    template_name = "panel/reviews.html"
+
+    def get_context_data(self, **kwargs: object) -> dict:
+        context = super().get_context_data(**kwargs)
+        today = timezone.localdate()
+        last_day = today + timedelta(days=settings.RMO_BOOKING_HORIZON_DAYS - 1)
+        reviews = (
+            AreaReview.objects.filter(
+                reviewer=self.person,
+                state=AreaReviewState.BOOKED,
+                booked_day__range=(today, last_day),
+            )
+            .select_related("merge_request__author")
+            .prefetch_related("areas")
+            .order_by("booked_day", "pk")
+        )
+        reviews_by_day: dict[date, list[AreaReview]] = {}
+        for review in reviews:
+            reviews_by_day.setdefault(review.booked_day, []).append(review)
+        capacity = {
+            row.day: row
+            for row in CapacityDay.objects.filter(
+                person=self.person, day__in=reviews_by_day
+            )
+        }
+        context["today"] = today
+        context["horizon_days"] = settings.RMO_BOOKING_HORIZON_DAYS
+        context["days"] = [
+            self._day(day, day_reviews, capacity.get(day))
+            for day, day_reviews in reviews_by_day.items()
+        ]
+        return context
+
+    def _day(
+        self, day: date, reviews: list[AreaReview], row: CapacityDay | None
+    ) -> dict:
+        """Return the booked minutes and budget of one day with its reviews."""
+        booked = row.booked_minutes if row else 0
+        budget = person_budget(self.person)
+        return {
+            "day": day,
+            "reviews": reviews,
+            "booked": booked,
+            "budget": budget,
+            "over": booked > budget,
+        }
+
+
+class AvailabilityView(PanelAccessMixin, TemplateView):
+    """Show the developer's working days, budget and leave."""
+
+    template_name = "panel/availability.html"
+
+    def get_context_data(self, **kwargs: object) -> dict:
+        context = super().get_context_data(**kwargs)
+        context.setdefault(
+            "days_form", WorkingDaysForm(initial={"days": self.person.working_days})
+        )
+        context.setdefault(
+            "budget_form",
+            BudgetForm(initial={"minutes": person_budget(self.person)}),
+        )
+        context.setdefault("leave_form", LeaveForm())
+        context["leaves"] = Leave.objects.filter(person=self.person).order_by(
+            "start_date", "pk"
+        )
+        context["default_budget"] = settings.RMO_DEFAULT_DAILY_BUDGET_MINUTES
+        context["default_days"] = ", ".join(
+            WEEKDAY_NAMES[day] for day in default_working_days()
+        )
+        return context
+
+
+class AvailabilityFormView(AvailabilityView):  # pylint: disable=too-many-ancestors
+    """Base of the availability posts: validate, save, redirect (DVP-7 to DVP-9)."""
+
+    http_method_names = ["post"]
+    form_class: type[forms.Form]
+    form_context_name: str
+    success_message: str
+
+    def save(self, cleaned_data: dict, actor: str) -> None:
+        """Store the validated data through `reviews.availability`."""
+        raise NotImplementedError
+
+    def post(self, request: HttpRequest) -> HttpResponse:
+        form = self.form_class(request.POST)
+        if not form.is_valid():
+            context = self.get_context_data(**{self.form_context_name: form})
+            return self.render_to_response(context, status=400)
+        self.save(form.cleaned_data, f"user:{request.user.username}")
+        messages.success(request, self.success_message)
+        return redirect("panel:availability")
+
+
+class WorkingDaysView(AvailabilityFormView):
+    """Save the developer's working days."""
+
+    # pylint: disable=too-many-ancestors
+    form_class = WorkingDaysForm
+    form_context_name = "days_form"
+    success_message = "Working days saved."
+
+    def save(self, cleaned_data: dict, actor: str) -> None:
+        availability.set_working_days(self.person, sorted(cleaned_data["days"]), actor)
+
+
+class BudgetView(AvailabilityFormView):
+    """Save the developer's daily review budget."""
+
+    # pylint: disable=too-many-ancestors
+    form_class = BudgetForm
+    form_context_name = "budget_form"
+    success_message = "Daily budget saved."
+
+    def save(self, cleaned_data: dict, actor: str) -> None:
+        availability.set_daily_budget(self.person, cleaned_data["minutes"], actor)
+
+
+class AddLeaveView(AvailabilityFormView):
+    """Add a leave period for the developer."""
+
+    # pylint: disable=too-many-ancestors
+    form_class = LeaveForm
+    form_context_name = "leave_form"
+    success_message = "Leave added."
+
+    def save(self, cleaned_data: dict, actor: str) -> None:
+        availability.add_leave(
+            self.person, cleaned_data["start_date"], cleaned_data["end_date"], actor
+        )
+
+
+class DeleteLeaveView(PanelAccessMixin, View):
+    """Delete one of the developer's own leaves; any other leave is 404."""
+
+    http_method_names = ["post"]
+
+    def post(self, request: HttpRequest, pk: int) -> HttpResponse:
+        try:
+            availability.delete_leave(self.person, pk, f"user:{request.user.username}")
+        except Leave.DoesNotExist as error:
+            raise Http404 from error
+        messages.success(request, "Leave removed.")
+        return redirect("panel:availability")
 
 
 def _summary(merge_request: MergeRequest) -> str:

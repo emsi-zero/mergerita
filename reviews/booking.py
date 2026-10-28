@@ -64,7 +64,7 @@ def book_area_review(area_review: AreaReview) -> bool:
             row = capacity.get((candidate.person.pk, day))
             if row is None:
                 continue
-            free = _budget(candidate.person) - row.booked_minutes
+            free = person_budget(candidate.person) - row.booked_minutes
             if free >= settings.RMO_SLOT_MINUTES:
                 fits.append(
                     (
@@ -91,7 +91,8 @@ def book_area_review(area_review: AreaReview) -> bool:
     return False
 
 
-def _budget(person: Person) -> int:
+def person_budget(person: Person) -> int:
+    """Return the person's daily budget in minutes, with the default fallback."""
     if person.daily_budget_minutes is not None:
         return person.daily_budget_minutes
     return settings.RMO_DEFAULT_DAILY_BUDGET_MINUTES
@@ -159,7 +160,7 @@ def _lock_capacity(
     ]
     CapacityDay.objects.bulk_create(
         [
-            CapacityDay(person=person, day=day, budget_minutes=_budget(person))
+            CapacityDay(person=person, day=day, budget_minutes=person_budget(person))
             for person, day in working
         ],
         ignore_conflicts=True,
@@ -188,7 +189,7 @@ def _book(
         raise ValueError("The author cannot review their own merge request (INV-2).")
     before = {"state": area_review.state, "reviewer": None, "booked_day": None}
     row.booked_minutes += settings.RMO_SLOT_MINUTES
-    row.budget_minutes = _budget(candidate.person)
+    row.budget_minutes = person_budget(candidate.person)
     row.save(update_fields=["booked_minutes", "budget_minutes"])
     area_review.state = AreaReviewState.BOOKED
     area_review.reviewer = candidate.person

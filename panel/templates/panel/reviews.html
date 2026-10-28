@@ -1,0 +1,32 @@
+{% extends "panel/base.html" %}
+{% block content %}
+<div class="page-head">
+  <h1>My review bookings</h1>
+  <div class="muted">Next {{ horizon_days }} days</div>
+</div>
+<div class="stack">
+  {% for d in days %}
+  <section class="card">
+    <div class="row day-head">
+      <h2 class="grow">{% if d.day == today %}Today · {% endif %}{{ d.day|date:"D j M" }}</h2>
+      <progress class="bar{% if d.over %} over{% endif %}" value="{{ d.booked }}" max="{{ d.budget }}"></progress>
+      <span class="small">{{ d.booked }} of {{ d.budget }} min booked</span>
+    </div>
+    <div class="stack tight">
+      {% for review in d.reviews %}
+      <div class="review">
+        <div class="row">
+          <span class="mono muted">!{{ review.merge_request.iid }}</span>
+          <span class="strong">{{ review.merge_request.title }}</span>
+          {% for area in review.areas.all %}<span class="mono chip">{{ area.name }}</span>{% endfor %}
+        </div>
+        <div class="muted small">Author {{ review.merge_request.author.name }} · {{ review.merge_request.changed_lines }} lines{% if review.reason %} · {{ review.reason }}{% endif %}</div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% empty %}
+  <div class="muted">No reviews booked. Free time stays available for new bookings.</div>
+  {% endfor %}
+</div>
+{% endblock %}

@@ -36,3 +36,5 @@ Pylint and `manage.py` need `DEBUG=1`. When DEBUG is off, settings require `SECR
 ## Developer panel
 
 Developers sign in at `/accounts/login/` and use `/panel/`. An admin links each Django user to a Person in the admin (Person → User). The password login has no attempt limit, so run the panel only inside the company network until GitLab SSO replaces it.
+
+The panel has three tabs: My MRs, My reviews and Availability. In Availability a developer sets working days, a daily budget (60, 120, 180 or 240 minutes) and leave. Each change writes one audit event. See `docs/testing.md` (scenario L) for how to check it.

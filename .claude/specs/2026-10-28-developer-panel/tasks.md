@@ -1,6 +1,6 @@
 # TASKS: Developer panel
 
-Spec: spec.md · Key: DVP · Route: project · State: in progress
+Spec: spec.md · Key: DVP · Route: project · State: done
 Checkpoint: `scripts/test.sh -q`
 
 ## Session 1 — Sign-in, layout, My MRs
@@ -21,16 +21,16 @@ Resume: Done: sign-in, panel layout, My MRs list and detail, 5 tests. Tabs for M
 
 ## Session 2 — My reviews and Availability
 
-State: pending · Covers: DVP-6, DVP-7, DVP-8, DVP-9, DVP-10
+State: done · Covers: DVP-6, DVP-7, DVP-8, DVP-9, DVP-10
 
-- [ ] T1 — Add `reviews/availability.py` with `set_working_days`, `set_daily_budget`, `add_leave` and `delete_leave`. Each runs one `atomic` block and writes one audit event. `delete_leave` is scoped to the person — DVP-7, DVP-8, DVP-9, DVP-10, INV-2
-- [ ] T2 — Add `panel/forms.py` with `WorkingDaysForm`, `BudgetForm` and `LeaveForm`. Add `AvailabilityView` (GET) to `panel/views.py`, and POST views for days, budget, leave add and leave delete (another person's leave → 404). Valid posts redirect with a message; invalid ones re-render with 400 — DVP-7, DVP-8, DVP-9
-- [ ] T3 — Add `MyReviewsView` (`/panel/reviews/`). Show bookings from today through the horizon, grouped by day, with booked minutes and budget from one `CapacityDay` query — DVP-6
-- [ ] T4 — Add templates `panel/reviews.html` and `panel/availability.html` in the mockup layout, with no outcome or urgent buttons
-- [ ] T5 — Add tests in `panel/tests/test_reviews.py` (DVP-6) and `panel/tests/test_availability.py` (DVP-7, DVP-8, DVP-9, DVP-10)
-- [ ] T6 — Add a "Developer panel" section to `docs/testing.md` (link a user to a Person in admin, sign in, what to check) and to `README.md`
+- [x] T1 — Add `reviews/availability.py` with `set_working_days`, `set_daily_budget`, `add_leave` and `delete_leave`. Each runs one `atomic` block and writes one audit event. `delete_leave` is scoped to the person — DVP-7, DVP-8, DVP-9, DVP-10, INV-2
+- [x] T2 — Add `panel/forms.py` with `WorkingDaysForm`, `BudgetForm` and `LeaveForm`. Add `AvailabilityView` (GET) to `panel/views.py`, and POST views for days, budget, leave add and leave delete (another person's leave → 404). Valid posts redirect with a message; invalid ones re-render with 400 — DVP-7, DVP-8, DVP-9
+- [x] T3 — Add `MyReviewsView` (`/panel/reviews/`). Show bookings from today through the horizon, grouped by day, with booked minutes and budget from one `CapacityDay` query — DVP-6
+- [x] T4 — Add templates `panel/reviews.html` and `panel/availability.html` in the mockup layout, with no outcome or urgent buttons
+- [x] T5 — Add tests in `panel/tests/test_reviews.py` (DVP-6) and `panel/tests/test_availability.py` (DVP-7, DVP-8, DVP-9, DVP-10)
+- [x] T6 — Add a "Developer panel" section to `docs/testing.md` (link a user to a Person in admin, sign in, what to check) and to `README.md`
 
 Gate A: `bin/craft-spec trace --session 2` green · `bin/craft-spec trace` green · checkpoint green through `bin/craft-check` · pylint, isort, black green
 Gate B: `reviewer` (lenses: spec, style, query) · `deep-reviewer` (logic, security on INV-1, INV-2 and the leave delete)
 
-Resume: The panel is complete for this version. Next: `/finish`, then resume the parked GitLab spec.
+Resume: Service, forms, 5 views, templates, 5 tests, docs done; Gate A green. Next: Gate B review, then `/finish`, then the parked GitLab spec.

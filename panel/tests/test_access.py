@@ -1,7 +1,32 @@
+from datetime import date
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
-PANEL_URLS = ["/panel/", "/panel/mrs/", "/panel/mrs/1/"]
+from panel.tests.test_merge_requests import create_person
+from reviews.models import Leave
+
+PANEL_URLS = [
+    "/panel/",
+    "/panel/mrs/",
+    "/panel/mrs/1/",
+    "/panel/reviews/",
+    "/panel/availability/",
+]
+
+
+POST_URLS = [
+    "/panel/availability/days/",
+    "/panel/availability/budget/",
+    "/panel/availability/leave/",
+    "/panel/availability/leave/1/delete/",
+]
+POST_DATA = {
+    "days": ["1"],
+    "minutes": "240",
+    "start_date": "2026-11-15",
+    "end_date": "2026-11-16",
+}
 
 
 class PanelAccessTests(TestCase):
@@ -18,6 +43,24 @@ class PanelAccessTests(TestCase):
                     f"/accounts/login/?next={url}",
                     fetch_redirect_response=False,
                 )
+        owner = create_person(1, "Owner", "owner")
+        leave = Leave.objects.create(
+            person=owner, start_date=date(2026, 12, 1), end_date=date(2026, 12, 2)
+        )
+        for url in POST_URLS:
+            with self.subTest(post_url=url):
+                response = self.client.post(url, POST_DATA)
+
+                self.assertRedirects(
+                    response,
+                    f"/accounts/login/?next={url}",
+                    fetch_redirect_response=False,
+                )
+        with self.subTest(url="no data changed"):
+            owner.refresh_from_db()
+            self.assertEqual(owner.working_days, [5, 6, 0, 1, 2])
+            self.assertIsNone(owner.daily_budget_minutes)
+            self.assertEqual(list(Leave.objects.all()), [leave])
         with self.subTest(url="/accounts/password_reset/"):
             self.assertEqual(
                 self.client.get("/accounts/password_reset/").status_code, 404
@@ -38,3 +81,17 @@ class PanelAccessTests(TestCase):
                 self.assertContains(
                     response, "not linked to a developer yet", status_code=403
                 )
+        owner = create_person(1, "Owner", "owner")
+        leave = Leave.objects.create(
+            person=owner, start_date=date(2026, 12, 1), end_date=date(2026, 12, 2)
+        )
+        for url in POST_URLS:
+            with self.subTest(post_url=url):
+                response = self.client.post(url, POST_DATA)
+
+                self.assertEqual(response.status_code, 403)
+        with self.subTest(url="no data changed"):
+            owner.refresh_from_db()
+            self.assertEqual(owner.working_days, [5, 6, 0, 1, 2])
+            self.assertIsNone(owner.daily_budget_minutes)
+            self.assertEqual(list(Leave.objects.all()), [leave])

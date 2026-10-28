@@ -220,6 +220,16 @@ AuditEvent.objects.update(action="x")
 
 This raises `AuditImmutableError`.
 
+### L. Developer panel (DVP)
+
+1. In the admin, create a Django user. Open a *Person* and set its *User* field to that user.
+2. Open `http://localhost:8000/accounts/login/` and sign in with that user. A user with no Person gets a 403 page.
+3. Check the three tabs:
+   - *My MRs*: only MRs the Person authored. Open one to see area reviews, the next step, and the history.
+   - *My reviews*: bookings from today to the booking horizon, grouped by day with booked minutes over budget.
+   - *Availability*: save working days (at least one), a budget (60, 120, 180 or 240), and add or remove leave. After each save, open *Audit events* in the admin. There is one event with your user, the action, and the before and after values.
+4. Change the id in `/panel/mrs/<id>/` to an MR of another author. It must return 404.
+
 ---
 
 ## 5. Reset
