@@ -256,3 +256,33 @@ docker exec rmo-test-pg psql -U orchestrator -c "CREATE DATABASE orchestrator;" 
 ```
 
 To stop Postgres: `docker rm -f rmo-test-pg`. `scripts/test.sh` starts it again.
+
+## 6. Smoke test against the work GitLab
+
+The orchestrator was built against `gitlab_mock`, which follows the GitLab docs. Run this checklist once against the real instance before you trust the integration. Start with a read-only token (scope `read_api`) and a project you can read. Booking (`set_reviewer`) needs a write token, so test it last, on a throw-away MR.
+
+Settings (environment):
+
+- `RMO_GITLAB_GATEWAY=integrations.gitlab.GitLabRestGateway`
+- `GITLAB_URL` (https), `GITLAB_TOKEN`, `GITLAB_WEBHOOK_TOKEN`
+- `RMO_AI_REVIEWER_GITLAB_USER_ID`: the id of the AI Reviewer user
+- `RMO_GITLAB_PROJECT_IDS`: comma-separated project ids for reconciliation, for example `12,34`
+- `RMO_RECONCILE_INTERVAL_SECONDS` (default 300)
+
+Checks. Mark each one on the real instance; a "no" is a finding to report.
+
+1. **First pass, read-only and without side effects.** Set a read-only token and one project id. Do not run `run_worker` yet: the worker would handle the events and queue real `set_reviewer` calls. In `manage.py shell` run only `from reviews.reconciler import reconcile_all; reconcile_all()`. Then `ReconcileCursor.objects.values()` has a row for the project, and in the admin *Inbox events* has one `reconcile` event per open MR. No request failed with 401 or 403.
+2. **Reviewer state names.** `GET /projects/:id/merge_requests/:iid/reviewers` on an MR the AI Reviewer reviewed. The `state` values are `unreviewed`, `reviewed`, `requested_changes`, `approved` and `unapproved`. If a name differs, update `PASS_STATES` and `FAIL_STATES` in `reviews/ai_gate.py`.
+3. **Reviewer-authored system notes.** `GET /projects/:id/merge_requests/:iid/notes?sort=desc&order_by=created_at`. When the AI Reviewer approves, a note with `system: true` is authored by it, and its body starts with `approved this merge request` (`APPROVAL_NOTE_TEXT`). When it requests changes, the body starts with `requested changes` (`CHANGES_NOTE_TEXT`). Both constants are in `integrations/gitlab.py`. If GitLab writes no such note, or other text, the fresh-verdict rule (GLI-6) never passes: report it.
+4. **Comment-only review.** When the AI Reviewer reviews without approving, it posts a plain comment (`system: false`), and its reviewer state is `reviewed`. If it posts no comment, the MR waits in `awaiting_ai_review` without notice.
+5. **"Remove approvals on push".** Read the project's setting (*Settings > Merge requests > Approvals*). When it is on, a push removes the AI Reviewer's approval; the bot must approve again. The orchestrator expects that: it treats the approval as fresh only when it is newer than the push.
+6. **MR diff overflow.** Open an MR with more than 1000 changed files, or a very large diff. Check `changes_count` in the MR JSON (a string such as `"1000+"`) and that `GET .../diffs` returns every file on all pages, or marks files `too_large` or `collapsed`. If the diffs stop early without a marker, the MR can escape its area: report it.
+7. **Reviewer PUT keeps the AI bot.** On a throw-away MR with the AI Reviewer as reviewer, let the orchestrator book a reviewer (or send `PUT /projects/:id/merge_requests/:iid` with `reviewer_ids` = the current ids plus one). The MR still lists the AI Reviewer and any other current reviewer.
+8. **Lost webhooks.** Stop the webhook, push a commit to an MR the AI Reviewer already approved, let the bot approve the new commit, and run the worker. The MR moves back through the AI gate and on to `awaiting_booking` or `in_review`.
+9. **Diff versions.** `GET /projects/:id/merge_requests/:iid/versions`. Each entry has `head_commit_sha` and `created_at`; the entry for the MR's current `sha` is the time of the last push, and an approval or a comment does not add one. If an approval adds a version, the entry time of the AI gate is wrong.
+10. **`sha` fields.** The MR list (`GET /projects/:id/merge_requests?state=opened`) has `sha` on every MR, and a Merge Request Hook has `object_attributes.last_commit.id`. A null `sha` (empty MR) is allowed.
+11. **`updated_at` moves.** A bot approval, a bot comment and a push each move the MR's `updated_at`. If an approval does not, reconciliation never reads it.
+12. **List filters.** `updated_after` is inclusive (the MR at that exact time is listed again; the orchestrator relies on its dedup), and `order_by=updated_at&sort=asc` is honoured.
+13. **Note Hook.** A bot comment on an MR sends a Note Hook to the orchestrator (the webhook must include *Comments*).
+
+With a write token and a throw-away MR, `run_worker --once` can need a second run, because it skips events younger than `RMO_INBOX_CLAIM_GRACE_SECONDS` (2 s). Run it again after a few seconds.

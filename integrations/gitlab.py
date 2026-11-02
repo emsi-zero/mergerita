@@ -138,6 +138,29 @@ class GitLabRestGateway:
             page = _next_page(response, page, path)
         return None
 
+    def get_version_time(
+        self, project_id: int, iid: int, head_sha: str
+    ) -> datetime | None:
+        """Return when the diff version with this head sha was created (its push), or None.
+
+        Versions are listed newest first. None means no version has that sha.
+        """
+        deadline = _deadline()
+        path = f"/projects/{project_id}/merge_requests/{iid}/versions"
+        page: int | None = 1
+        while page is not None:
+            response = self._request(
+                "GET",
+                path,
+                deadline,
+                params={"per_page": PER_PAGE, "page": page},
+            )
+            for version in response.json():
+                if version["head_commit_sha"] == head_sha:
+                    return datetime.fromisoformat(version["created_at"])
+            page = _next_page(response, page, path)
+        return None
+
     def list_open_merge_requests(
         self, project_id: int, updated_after: str | None, page: int
     ) -> MergeRequestPage:
@@ -160,6 +183,7 @@ class GitLabRestGateway:
                     updated_at=item["updated_at"],
                     author_id=item["author"]["id"],
                     title=item["title"],
+                    sha=item["sha"],
                 )
                 for item in response.json()
             ],

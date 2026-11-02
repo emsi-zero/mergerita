@@ -1,6 +1,6 @@
 # TASKS: GitLab integration
 
-Spec: spec.md · Key: GLI · Route: project · State: in progress
+Spec: spec.md · Key: GLI · Route: project · State: done
 Checkpoint: `scripts/test.sh -q`
 
 ## Session 1 — Mock GitLab service
@@ -53,23 +53,23 @@ Resume: The AI gate acts only on a fresh verdict: `ai_gate` reads the bot's late
 
 ## Session 4 — Reconciliation
 
-State: pending · Covers: GLI-8, GLI-9, GLI-10, GLI-11, GLI-13
+State: done · Covers: GLI-8, GLI-9, GLI-10, GLI-11, GLI-13
 
-- [ ] T1 — Add the `ReconcileCursor` model and its `reviews` migration. Add `RMO_GITLAB_PROJECT_IDS` (environment, comma-separated ints, default empty) and `RMO_RECONCILE_INTERVAL_SECONDS = 300` to settings — GLI-8
-- [ ] T2 — Add `reviews/reconciler.py` `reconcile_all()`:
+- [x] T1 — Add the `ReconcileCursor` model and its `reviews` migration. Add `RMO_GITLAB_PROJECT_IDS` (environment, comma-separated ints, default empty) and `RMO_RECONCILE_INTERVAL_SECONDS = 300` to settings — GLI-8
+- [x] T2 — Add `reviews/reconciler.py` `reconcile_all()`:
   - Wrap the whole run in a session `pg_try_advisory_lock`; return when another worker holds it.
   - Per project, fetch pages with no transaction open.
   - Per page, in one `atomic`, call `store_event` for each MR (source `reconcile`, UUID `project:iid:updated_at`), then advance the cursor.
   - On `GitLabError`, log and move on to the next project.
 
   Covers GLI-8, GLI-10, GLI-11, INV-2, INV-4.
-- [ ] T3 — In `reviews/lifecycle.py`, action `reconcile` creates an unknown MR (the same as `open`) and counts as an update for a known MR — GLI-9. Store the MR head `sha` on `MergeRequest` (from webhooks and the MR list); a reconciled MR whose `sha` changed counts as new commits and goes through `_reopen_ai_gate`. The entry time is the push itself — the newest MR diff version's `created_at` (`GET …/merge_requests/:iid/versions`) — not the list's `updated_at`, which a later bot approval also moves. Write `sha` from the open hook, the push hook (`last_commit.id`) and the list; a null stored `sha` (MRs from before this session) is recorded without counting as a push. GLI-13 gets a subTest: webhooks off, push, bot approves, reconcile → `awaiting_booking` (Session 3 deep review, issue C, twice) — GLI-7, GLI-13
-- [ ] T4 — In `reviews/management/commands/run_worker.py`, call `reconcile_all()` when the interval has passed (monotonic timer), and also once in `--once` mode
-- [ ] T5 — Tests in `reviews/tests/test_reconciler.py` for GLI-8, GLI-9, GLI-10 (`TransactionTestCase`, lock held by a second connection), GLI-11
-- [ ] T5b — End-to-end test GLI-13 in `tests_e2e/test_gitlab_flow.py`: mock webhooks off, open and approve an MR, run reconciliation and the worker, and assert the same booked state as GLI-12 — GLI-13
-- [ ] T6 — Add a "smoke test against the work GitLab" section to `docs/testing.md`: the settings to set, and the checks to make for the reviewer-state names and for a reviewer merge that keeps the AI bot
+- [x] T3 — In `reviews/lifecycle.py`, action `reconcile` creates an unknown MR (the same as `open`) and counts as an update for a known MR — GLI-9. Store the MR head `sha` on `MergeRequest` (from webhooks and the MR list); a reconciled MR whose `sha` changed counts as new commits and goes through `_reopen_ai_gate`. The entry time is the push itself — the newest MR diff version's `created_at` (`GET …/merge_requests/:iid/versions`) — not the list's `updated_at`, which a later bot approval also moves. Write `sha` from the open hook, the push hook (`last_commit.id`) and the list; a null stored `sha` (MRs from before this session) is recorded without counting as a push. GLI-13 gets a subTest: webhooks off, push, bot approves, reconcile → `awaiting_booking` (Session 3 deep review, issue C, twice) — GLI-7, GLI-13
+- [x] T4 — In `reviews/management/commands/run_worker.py`, call `reconcile_all()` when the interval has passed (monotonic timer), and also once in `--once` mode
+- [x] T5 — Tests in `reviews/tests/test_reconciler.py` for GLI-8, GLI-9, GLI-10 (`TransactionTestCase`, lock held by a second connection), GLI-11
+- [x] T5b — End-to-end test GLI-13 in `tests_e2e/test_gitlab_flow.py`: mock webhooks off, open and approve an MR, run reconciliation and the worker, and assert the same booked state as GLI-12 — GLI-13
+- [x] T6 — Add a "smoke test against the work GitLab" section to `docs/testing.md`: the settings to set, and the checks to make for the reviewer-state names and for a reviewer merge that keeps the AI bot
 
 Gate A: `bin/craft-spec trace --session 4` green · `bin/craft-spec trace` green · checkpoint green through `bin/craft-check` · pylint, isort, black green
 Gate B: `reviewer` (lenses: spec, style, query) · `deep-reviewer` (logic, security on INV-2, INV-4 and the lock)
 
-Resume: Webhooks and reconciliation both feed the inbox. The real gateway is ready for a smoke test at work. Next: `/finish`.
+Resume: Code and tests done; Gate A recorded; Gate B (reviewer, deep-reviewer) not run. Reconciliation: `reviews/reconciler.py` (`reconcile_all`, session advisory lock 7302, page + cursor in one atomic), called by `run_worker` on a monotonic timer and once in `--once`. The reconciler reads the newest diff version time (`get_latest_version_time`) outside the transaction and puts it in the payload as `version_created_at`; lifecycle uses it as the gate entry time and compares `sha` with `MergeRequest.head_sha`. A reconcile-created MR also queues a check (the bot may have approved already). Smoke checklist: `docs/testing.md` section 6. Gate B round 1 fixes applied (keyset paging with `RMO_RECONCILE_LAG_SECONDS`, any-exception guard per project, `head_sha_at` stale-snapshot rule, versions call only for unknown or changed sha, reconcile checks `waiting_on_author`, source check); deep-reviewer re-reviews the Highs. Next: re-review, then `/finish`.

@@ -11,6 +11,7 @@ class FakeGitLabGateway:
         self.reviewer_states: dict[tuple[int, int, int], str] = {}
         self.latest_verdict_times: dict[tuple[int, int, int], datetime] = {}
         self.latest_comment_times: dict[tuple[int, int, int], datetime] = {}
+        self.version_times: dict[tuple[int, int, str], datetime] = {}
         self.open_merge_requests: dict[int, MergeRequestPage] = {}
         self.calls: list[tuple] = []
 
@@ -34,6 +35,11 @@ class FakeGitLabGateway:
         self, project_id: int, iid: int, user_id: int
     ) -> datetime | None:
         return self.latest_comment_times.get((project_id, iid, user_id))
+
+    def get_version_time(
+        self, project_id: int, iid: int, head_sha: str
+    ) -> datetime | None:
+        return self.version_times.get((project_id, iid, head_sha))
 
     def list_open_merge_requests(  # pylint: disable=unused-argument
         self, project_id: int, updated_after: str | None, page: int

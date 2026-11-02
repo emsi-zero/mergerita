@@ -53,6 +53,24 @@ def note_hook(iid: int, noteable_type: str, user_id: int = 11) -> InboxEvent:
     )
 
 
+def reconcile_event(iid: int, sha: str, version_time: datetime) -> InboxEvent:
+    return InboxEvent(
+        source="reconcile",
+        event_kind="Merge Request Hook",
+        payload={
+            "project": {"id": 7},
+            "object_attributes": {
+                "iid": iid,
+                "action": "reconcile",
+                "author_id": 11,
+                "title": "MR",
+                "sha": sha,
+                "version_created_at": version_time.isoformat(),
+            },
+        },
+    )
+
+
 def hours_from_now(hours: int) -> datetime:
     return timezone.now() + timedelta(hours=hours)
 
@@ -69,8 +87,12 @@ class AiGateTest(TestCase):
             patcher.start()
             self.addCleanup(patcher.stop)
 
-    def create_merge_request(self, iid: int, state: str) -> MergeRequest:
+    def create_merge_request(
+        self, iid: int, state: str, head_sha: str | None = None
+    ) -> MergeRequest:
         return MergeRequest.objects.create(
+            head_sha=head_sha,
+            head_sha_at=hours_from_now(-10) if head_sha else None,
             project_id=7,
             iid=iid,
             author=self.author,
@@ -103,7 +125,8 @@ class AiGateTest(TestCase):
         Note Hook on another noteable queues none; given an MR waiting on the
         author, a hook from the AI Reviewer queues a check and a hook from
         anyone else queues none; two hooks queue two checks that give one
-        transition and one area resolution."""
+        transition and one area resolution; a reconciliation event queues a
+        check for an MR awaiting AI review or waiting on the author."""
         for iid, name, state, event, expected_checks in (
             (3, "mr_hook", AWAITING, merge_request_hook(3, "approval"), 1),
             (4, "note_hook", AWAITING, note_hook(4, "MergeRequest"), 1),
@@ -133,6 +156,23 @@ class AiGateTest(TestCase):
 
                 # then
                 self.assertEqual(self.queued_checks(merge_request), expected_checks)
+
+        for iid, name, state, stored_sha, expected_state in (
+            (20, "reconcile_waiting_on_author", WAITING, "s2", WAITING),
+            (21, "reconcile_awaiting_same_sha", AWAITING, "s2", AWAITING),
+            (22, "reconcile_stored_sha_null", WAITING, None, WAITING),
+        ):
+            with self.subTest(name=name):
+                # given
+                merge_request = self.create_merge_request(iid, state, stored_sha)
+
+                # when: a reconciliation event with head sha s2
+                handle_event(reconcile_event(iid, "s2", hours_from_now(-5)))
+
+                # then
+                merge_request.refresh_from_db()
+                self.assertEqual(merge_request.state, expected_state)
+                self.assertEqual(self.queued_checks(merge_request), 1)
 
         with self.subTest(name="repeated_hooks"):
             # given
@@ -225,14 +265,20 @@ class AiGateTest(TestCase):
                 self.assertEqual(merge_request.state, start)
                 self.assertFalse(OutboxCall.objects.exists())
 
-    def test_new_commits_return_merge_request_to_ai_gate(self) -> None:
+    def test_new_commits_return_merge_request_to_ai_gate(  # pylint: disable=too-many-locals,too-many-statements
+        self,
+    ) -> None:
         """GLI-7: Given an MR waiting on the author or awaiting AI review, when
         a Merge Request Hook reports new commits, then the gate entry time is
         reset and the MR awaits AI review again, with an audit event and one
         queued check when it was waiting; a hook without new commits, or an MR
         in another state, changes nothing; the entry time is the update time
         of the hook payload (ISO 8601 or "UTC" format, a whole second counts
-        as its end), never moves back, and is set under a row lock."""
+        as its end), never moves back, and is set under a row lock; a
+        reconciliation event with a changed head sha is a push, with no stored sha
+        it only records the sha, and an older snapshot than the stored push, a
+        delayed older push webhook, and a snapshot with no version of its sha are
+        ignored."""
         long_ago = hours_from_now(-23)
         for iid, name, state, attributes, expected_state, reset, audits in (
             (3, "waiting", WAITING, {"oldrev": "abc"}, AWAITING, True, 1),
@@ -314,6 +360,93 @@ class AiGateTest(TestCase):
             self.assertEqual(
                 merge_request.ai_gate_entered_at, datetime(2030, 1, 1, tzinfo=UTC)
             )
+
+        for iid, name, state, stored_sha, expected_state, reopened in (
+            (30, "reconcile_sha_changed", WAITING, "s1", AWAITING, True),
+            (31, "reconcile_stored_sha_null", WAITING, None, WAITING, False),
+        ):
+            with self.subTest(name=name):
+                # given
+                merge_request = self.create_merge_request(iid, state, stored_sha)
+                version_time = hours_from_now(-5)
+
+                # when: a reconciliation event with head sha s2
+                handle_event(reconcile_event(iid, "s2", version_time))
+
+                # then: s2 is recorded; only a changed non-null sha is a push
+                merge_request.refresh_from_db()
+                self.assertEqual(merge_request.head_sha, "s2")
+                self.assertEqual(merge_request.state, expected_state)
+                self.assertEqual(
+                    merge_request.ai_gate_entered_at == version_time, reopened
+                )
+
+        with self.subTest(name="stale_reconcile_snapshot"):
+            # given an MR whose push to s3 arrived by webhook
+            merge_request = self.create_merge_request(32, WAITING, "s1")
+            push_time = hours_from_now(-4)
+            handle_event(
+                merge_request_hook(
+                    32,
+                    "update",
+                    oldrev="s1",
+                    last_commit={"id": "s3"},
+                    updated_at=push_time.isoformat(),
+                )
+            )
+
+            # when a reconciliation snapshot of the older push to s2 arrives
+            handle_event(reconcile_event(32, "s2", hours_from_now(-8)))
+
+            # then s3 stays the head and the gate was reopened once
+            merge_request.refresh_from_db()
+            self.assertEqual(merge_request.head_sha, "s3")
+            self.assertEqual(merge_request.ai_gate_entered_at, push_time)
+            self.assertEqual(
+                AuditEvent.objects.filter(
+                    action="mr.new_commits", subject_id=str(merge_request.pk)
+                ).count(),
+                1,
+            )
+
+        with self.subTest(name="delayed_older_push_webhook"):
+            # given an MR whose head s3 was pushed 4 hours ago
+            merge_request = self.create_merge_request(33, AWAITING, "s3")
+            merge_request.head_sha_at = hours_from_now(-4)
+            merge_request.save()
+
+            # when a delayed push webhook for the older sha s2 arrives
+            handle_event(
+                merge_request_hook(
+                    33,
+                    "update",
+                    oldrev="s1",
+                    last_commit={"id": "s2"},
+                    updated_at=hours_from_now(-8).isoformat(),
+                )
+            )
+
+            # then s3 stays the head
+            merge_request.refresh_from_db()
+            self.assertEqual(merge_request.head_sha, "s3")
+
+        with self.subTest(name="reconcile_without_version_of_the_sha"):
+            # given an MR waiting on the author, and a snapshot with no version time
+            merge_request = self.create_merge_request(34, WAITING, "s1")
+            event = reconcile_event(34, "s2", hours_from_now(-5))
+            del event.payload["object_attributes"]["version_created_at"]
+            event.payload["object_attributes"]["updated_at"] = hours_from_now(
+                -1
+            ).isoformat()
+
+            # when
+            handle_event(event)
+
+            # then it is not a push, and a check is queued
+            merge_request.refresh_from_db()
+            self.assertEqual(merge_request.head_sha, "s1")
+            self.assertEqual(merge_request.state, WAITING)
+            self.assertEqual(self.queued_checks(merge_request), 1)
 
         with self.subTest(name="row_lock"):
             # given

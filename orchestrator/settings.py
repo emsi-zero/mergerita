@@ -88,6 +88,16 @@ _AI_REVIEWER_USER_ID = os.environ.get("RMO_AI_REVIEWER_GITLAB_USER_ID")
 RMO_AI_REVIEWER_GITLAB_USER_ID = (
     int(_AI_REVIEWER_USER_ID) if _AI_REVIEWER_USER_ID else None
 )
+# GitLab project ids that reconciliation reads, comma-separated. Empty turns it off.
+RMO_GITLAB_PROJECT_IDS = [
+    int(project_id)
+    for project_id in os.environ.get("RMO_GITLAB_PROJECT_IDS", "").split(",")
+    if project_id.strip()
+]
+RMO_RECONCILE_INTERVAL_SECONDS = 300
+# Each list call asks for MRs updated since the cursor minus this lag, so an MR whose
+# update was not visible yet when the cursor passed it is read on the next call.
+RMO_RECONCILE_LAG_SECONDS = 60
 RMO_COVERAGE_POLICY = "strict"  # "strict" or "combined"
 # Weekday numbers follow datetime.weekday(): Monday is 0. Saturday to Wednesday.
 RMO_DEFAULT_WORKING_DAYS = [5, 6, 0, 1, 2]

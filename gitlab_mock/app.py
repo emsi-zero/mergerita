@@ -56,6 +56,7 @@ class MockState:  # pylint: disable=too-many-instance-attributes
         self.fault: dict[str, Any] | None = None
         self.deliveries: list[dict[str, Any]] = []
         self._sha_counter = 0
+        self._version_counter = 0
 
     def user(self, user_id: int) -> dict[str, Any]:
         """Return a known user, or create a placeholder for an unseen id."""
@@ -97,6 +98,21 @@ class MockState:  # pylint: disable=too-many-instance-attributes
                     "author": _user_dict(self.user(user_id)),
                     "created_at": _now(),
                     "system": system,
+                }
+            )
+
+    def _next_version_id(self) -> int:
+        self._version_counter += 1
+        return self._version_counter
+
+    def add_version(self, mr: dict[str, Any]) -> None:
+        """Record a diff version for the MR's current head sha, as GitLab does on each push."""
+        with self.lock:
+            mr["versions"].append(
+                {
+                    "id": self._next_version_id(),
+                    "head_commit_sha": mr["sha"],
+                    "created_at": _now(),
                 }
             )
 
@@ -187,6 +203,7 @@ class MockState:  # pylint: disable=too-many-instance-attributes
             "state": mr["state"],
             "created_at": mr["created_at"],
             "updated_at": mr["updated_at"],
+            "last_commit": {"id": mr["sha"]},
             **extra,
         }
         return {
@@ -276,6 +293,14 @@ def _api_router(state: MockState) -> APIRouter:
         notes.sort(key=lambda n: (n["created_at"], n["id"]), reverse=newest_first)
         return _paged(notes, request, response)
 
+    @router.get("/projects/{project_id}/merge_requests/{iid}/versions")
+    def get_versions(
+        project_id: int, iid: int, request: Request, response: Response
+    ) -> list[dict[str, Any]]:
+        with state.lock:
+            versions = list(reversed(state.mr(project_id, iid)["versions"]))
+        return _paged(versions, request, response)
+
     @router.get(
         "/projects/{project_id}/merge_requests/{iid}/reviewers",
     )
@@ -346,10 +371,12 @@ def _control_router(state: MockState) -> APIRouter:
                 ],
                 "diffs": body.get("diffs", []),
                 "notes": [],
+                "versions": [],
                 "sha": state.new_sha(),
                 "created_at": now,
                 "updated_at": now,
             }
+            state.add_version(mr)
             state.mrs[(project_id, iid)] = mr
             payload = state.mr_hook(mr, "open", author)
             result = state.mr_json(mr)
@@ -422,6 +449,7 @@ def _activity_router(state: MockState) -> APIRouter:
         with state.lock:
             oldrev = mr["sha"]
             mr["sha"] = state.new_sha()
+            state.add_version(mr)
             if "diffs" in body:
                 mr["diffs"] = body["diffs"]
             state.touch(mr)

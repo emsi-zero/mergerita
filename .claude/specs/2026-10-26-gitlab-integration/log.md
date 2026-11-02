@@ -82,3 +82,20 @@ tests `scripts/test.sh -q` PASS (45 passed, 105 subtests) · pylint 10.00 PASS �
 Two Confirmed Highs, both closed after delta re-reviews by deep-reviewer (stale verdict after a push; fresh comment paired with stale state). Final round Mediums (`reviewed` freshness, Session 4 entry-time source) fixed by spec delta and Gate A; Low prefix matching fixed. No open Confirmed Critical/High.
 Deferred: a check makes two paged note scans (one helper, kept simple); the row-lock test asserts the FOR UPDATE query rather than racing; GitLab system-note texts and reviewer-authored system notes are assumptions for the smoke test (Session 4 T6).
 Session 3: done.
+
+## 2026-11-02 — Session 4 Gate B round 1 + spec delta
+reviewer (spec, style, query): COMMENT — GLI-9 wording vs the reconcile check; one versions call per listed MR; smoke checklist misses /versions, sha, last_commit, updated_at moves, sort/updated_after; check 1 would queue real writes.
+deep-reviewer (logic, security): REQUEST_CHANGES. [High, confirmed] reconcile never queues a check for an MR in `waiting_on_author`, so a lost late bot approval is never recovered. [High, confirmed] any non-GitLab error in reconciliation crashes the worker on every start (crash loop stops all processing). [Medium, reproduced] offset paging with order_by=updated_at skips an MR updated mid-run and the cursor passes it. [Medium] a stale reconcile snapshot rolls `head_sha` back and reopens the gate. [Medium] push-detection branches untested; e2e subtest does not assert the middle state. [Low] no cursor lag; lock edge cases; reconcile blocks the loop; `reconcile` action accepted from webhooks.
+Spec delta (approved by the developer): GLI-5 also queues a check for reconcile events on `waiting_on_author`; GLI-9 queues a check for a reconcile-created MR; Contracts list the reconcile payload, `head_sha`, `ReconcileCursor`, `/versions`, and `RMO_RECONCILE_LAG_SECONDS` (60).
+
+## 2026-11-02 14:26 UTC — spec delta approved
+sha256 5542ab55d1fc
+
+## 2026-11-02 — Session 4 (reconciliation) Gate A
+tests `scripts/test.sh -q` PASS (50 passed, 124 subtests) · pylint 10.00 PASS · isort PASS · black PASS · `craft-spec trace` PASS (14/14) · makemigrations --check clean · manual scenario B re-run against the mock PASS.
+
+## 2026-11-02 — Session 4 Gate B
+Round 1: two Confirmed Highs (no reconcile check for `waiting_on_author`; non-GitLab errors crash-looped the worker) + Mediums (paging skip — reproduced; stale snapshot; versions call per MR; tests; smoke checklist). Spec delta approved. Delta re-review: both Highs and all round-1 Mediums closed with evidence; INV-1, INV-2, INV-4 hold.
+Delta round Medium (reproduced: >100 MRs in the lag window stalled every run) and two Lows (delayed push webhook moved head_sha back; version time of a newer push) fixed and verified by Gate A (Medium/Low: no re-review needed, workflow §3).
+Deferred: real gateway paging through `/versions` has no direct unit test (covered by GLI-13 e2e); a permanent pile of >100 MRs with one exact `updated_at` still raises loudly; reconciliation blocks the worker loop while it runs (documented).
+Session 4: done. Project: all sessions done. Remaining before production: the smoke test against the work GitLab (docs/testing.md §6).

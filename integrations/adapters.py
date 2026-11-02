@@ -24,6 +24,7 @@ class MergeRequestSummary:
     updated_at: str
     author_id: int
     title: str
+    sha: str | None
 
 
 @dataclass(frozen=True)
@@ -53,6 +54,10 @@ class GitLabGatewayInterface(Protocol):
 
     def get_latest_comment_time(
         self, project_id: int, iid: int, user_id: int
+    ) -> datetime | None: ...
+
+    def get_version_time(
+        self, project_id: int, iid: int, head_sha: str
     ) -> datetime | None: ...
 
     def list_open_merge_requests(

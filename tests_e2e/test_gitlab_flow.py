@@ -4,7 +4,14 @@ from django.test import LiveServerTestCase, override_settings
 
 from gitlab_mock.testing import running_mock
 from integrations.adapters import get_gitlab_gateway
-from reviews.models import CodeArea, OwnerRole, Ownership, Person
+from reviews.models import (
+    CodeArea,
+    MergeRequest,
+    MergeRequestState,
+    OwnerRole,
+    Ownership,
+    Person,
+)
 
 TOKEN = "glpat-e2e-token"
 SECRET = "e2e-webhook-secret"
@@ -90,3 +97,120 @@ class GitLabFlowTest(LiveServerTestCase):
                     sorted(entry["user"]["id"] for entry in reviewers),
                     [API_REVIEWER_ID, WEB_REVIEWER_ID, BOT_ID],
                 )
+
+    def test_reconciliation_books_merge_request_without_webhooks(self) -> None:
+        """GLI-13: Given the mock GitLab sends no webhooks, when an MR is opened
+        and approved by the AI Reviewer and the worker reconciles, then the MR
+        lists the AI Reviewer and both booked reviewers; and when the AI Reviewer
+        asked for changes, the author pushed and the AI Reviewer approved the new
+        commits, the next reconciliation books that MR too; and when the AI Reviewer
+        asked for changes and approves later with no push, that MR is booked too."""
+        with running_mock(
+            TOKEN, f"{self.live_server_url}/webhooks/gitlab/", SECRET
+        ) as base:
+            with override_settings(
+                DEBUG=True,
+                GITLAB_URL=base,
+                GITLAB_TOKEN=TOKEN,
+                GITLAB_WEBHOOK_TOKEN=SECRET,
+                RMO_GITLAB_GATEWAY="integrations.gitlab.GitLabRestGateway",
+                RMO_AI_REVIEWER_GITLAB_USER_ID=BOT_ID,
+                RMO_GITLAB_PROJECT_IDS=[PROJECT_ID],
+                RMO_INBOX_CLAIM_GRACE_SECONDS=0,
+            ):
+                # given
+                get_gitlab_gateway.cache_clear()
+                httpx.post(
+                    f"{base}/_mock/webhooks", json={"enabled": False}, timeout=30
+                ).raise_for_status()
+                diffs = [added_file("api/a.py"), added_file("web/b.ts")]
+                for _ in range(2):
+                    httpx.post(
+                        f"{base}/_mock/mrs",
+                        json={
+                            "project_id": PROJECT_ID,
+                            "author_id": AUTHOR_ID,
+                            "reviewer_ids": [BOT_ID],
+                            "diffs": diffs,
+                        },
+                        timeout=30,
+                    ).raise_for_status()
+                self.set_bot_state(base, 1, "approved")
+
+                # when
+                call_command("run_worker", "--once")
+
+                # then
+                state = httpx.get(f"{base}/_mock/state", timeout=30).json()
+                reviewers = state["merge_requests"][0]["reviewer_states"]
+                self.assertEqual(
+                    sorted(entry["user"]["id"] for entry in reviewers),
+                    [API_REVIEWER_ID, WEB_REVIEWER_ID, BOT_ID],
+                )
+
+                with self.subTest("author pushes after a change request"):
+                    # given
+                    self.set_bot_state(base, 2, "requested_changes")
+                    call_command("run_worker", "--once")  # MR 2 goes to its author
+                    self.assertEqual(
+                        MergeRequest.objects.get(iid=2).state,
+                        MergeRequestState.WAITING_ON_AUTHOR,
+                    )
+                    httpx.post(
+                        f"{base}/_mock/mrs/{PROJECT_ID}/2/push",
+                        json={"diffs": diffs},
+                        timeout=30,
+                    ).raise_for_status()
+                    self.set_bot_state(base, 2, "approved")
+
+                    # when
+                    call_command("run_worker", "--once")
+
+                    # then
+                    self.assertIn(
+                        MergeRequest.objects.get(iid=2).state,
+                        (
+                            MergeRequestState.AWAITING_BOOKING,
+                            MergeRequestState.IN_REVIEW,
+                        ),
+                    )
+
+                with self.subTest("late approval with no push"):
+                    # given
+                    httpx.post(
+                        f"{base}/_mock/mrs",
+                        json={
+                            "project_id": PROJECT_ID,
+                            "author_id": AUTHOR_ID,
+                            "reviewer_ids": [BOT_ID],
+                            "diffs": diffs,
+                        },
+                        timeout=30,
+                    ).raise_for_status()
+                    call_command("run_worker", "--once")  # MR 3 is known
+                    self.set_bot_state(base, 3, "requested_changes")
+                    call_command("run_worker", "--once")
+                    self.assertEqual(
+                        MergeRequest.objects.get(iid=3).state,
+                        MergeRequestState.WAITING_ON_AUTHOR,
+                    )
+                    self.set_bot_state(base, 3, "approved")
+
+                    # when
+                    call_command("run_worker", "--once")
+
+                    # then
+                    self.assertIn(
+                        MergeRequest.objects.get(iid=3).state,
+                        (
+                            MergeRequestState.AWAITING_BOOKING,
+                            MergeRequestState.IN_REVIEW,
+                        ),
+                    )
+
+    def set_bot_state(self, base: str, iid: int, new_state: str) -> None:
+        httpx.post(
+            f"{base}/_mock/mrs/{PROJECT_ID}/{iid}/reviewers/{BOT_ID}/state",
+            json={"state": new_state},
+            timeout=30,
+        ).raise_for_status()

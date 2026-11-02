@@ -50,6 +50,10 @@ class MergeRequest(models.Model):
     # When the MR last entered the AI gate: opened, or new commits pushed.
     ai_gate_entered_at = models.DateTimeField(default=timezone.now, db_default=Now())
     changed_lines = models.PositiveIntegerField(default=0)
+    # Head commit sha last seen from GitLab. Null for MRs stored before it was recorded.
+    head_sha = models.CharField(max_length=64, null=True, blank=True)
+    # When that sha was pushed (GitLab's clock). An older reconcile snapshot is ignored.
+    head_sha_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         constraints = [
@@ -57,6 +61,13 @@ class MergeRequest(models.Model):
                 fields=["project_id", "iid"], name="mr_unique_project_iid"
             )
         ]
+
+
+class ReconcileCursor(models.Model):
+    """How far reconciliation has read one project. Null means "read all open MRs"."""
+
+    project_id = models.BigIntegerField(unique=True)
+    updated_after = models.DateTimeField(null=True, blank=True)
 
 
 class CodeArea(models.Model):
