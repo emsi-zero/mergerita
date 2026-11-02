@@ -25,7 +25,9 @@ Spec: spec.md · Key: GLI
 | Per project, list `state=opened&order_by=updated_at&sort=asc&updated_after=<cursor>` page by page. For each page, in one `atomic`, store one inbox event per MR with `event_uuid = f"{project_id}:{iid}:{updated_at}"`, source `reconcile`, kind `Merge Request Hook`, `mr_key` as for webhooks, payload `{"project": {"id"}, "object_attributes": {"iid", "action": "reconcile", "author_id", "title"}}`, then set the cursor to the page's last `updated_at`. A GitLab error stops that project's run, logs, and leaves the committed cursor | `reviews.reconciler` | INV-2, GLI-8, GLI-11 | Writing MR rows directly; advancing the cursor once per run |
 | `ReconcileCursor(project_id unique, updated_after nullable)`. Null means "read all open MRs" | `reviews.models` | GLI-8 | A settings value |
 | Lifecycle treats action `reconcile` as `open` for an unknown MR (GLI-9), and as a non-open update for a known MR (so GLI-5 queues a check) | `reviews.lifecycle` | INV-4 | A separate reconcile code path |
-| Tests mock HTTP with `respx`, with payloads copied from the GitLab REST v4 doc examples, trimmed to the fields read | tests | — | A live GitLab |
+| Unit tests of the gateway use `respx` (errors, timeouts, paging edge cases). Integration and end-to-end tests use `gitlab_mock`, a FastAPI service with GitLab REST v4 payload shapes from the docs, trimmed to the fields read | tests | — | A live GitLab; respx only (never exercises real HTTP or webhooks) |
+| `gitlab_mock` is a separate top-level package, not a Django app: its own FastAPI app factory, in-memory state, uvicorn in a thread for tests, and a CLI for manual demos. It imports nothing from the orchestrator, so it cannot accidentally share state or settings | `gitlab_mock` | test isolation | A Django app inside the project; a Docker image (registry unavailable here) |
+| End-to-end tests (`tests_e2e/`) run the orchestrator under `LiveServerTestCase`, so the mock's webhooks reach a real HTTP endpoint. The worker runs in-process (`run_worker --once`) | tests | GLI-12, GLI-13 | Calling views directly (skips the HTTP path that GLI-12 exists to prove) |
 
 ## Data and migrations
 

@@ -1,0 +1,161 @@
+#!/usr/bin/env python3
+"""Run and drive the mock GitLab. Run it as: .venv/bin/python scripts/gitlab-mock ...
+
+  scripts/gitlab-mock serve --port 8080 --token T --webhook-url URL --webhook-secret S
+  scripts/gitlab-mock open PROJECT_ID AUTHOR_ID [--title T] [--file PATH ...]
+                           [--reviewer USER_ID ...]
+                           [--rename OLD:NEW ...] [--too-large PATH ...]
+  scripts/gitlab-mock assign PROJECT_ID IID USER_ID
+  scripts/gitlab-mock approve PROJECT_ID IID USER_ID
+  scripts/gitlab-mock request-changes PROJECT_ID IID USER_ID
+  scripts/gitlab-mock push PROJECT_ID IID
+  scripts/gitlab-mock note PROJECT_ID IID USER_ID TEXT
+  scripts/gitlab-mock state
+  scripts/gitlab-mock webhooks on|off
+  scripts/gitlab-mock fail COUNT [--status S | --timeout]
+
+Control commands talk to --url (default $GITLAB_MOCK_URL or http://127.0.0.1:8080).
+"""
+
+import argparse
+import json
+import os
+import sys
+from pathlib import Path
+from typing import Any
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+# pylint: disable=wrong-import-position
+import httpx
+import uvicorn
+
+from gitlab_mock.app import create_app
+
+
+def _diff_for(
+    old_path: str, new_path: str | None = None, too_large: bool = False
+) -> dict[str, Any]:
+    """Return a GitLab diff entry: added, renamed (new_path set) or too large."""
+    new_path = new_path or old_path
+    renamed = new_path != old_path
+    return {
+        "old_path": old_path,
+        "new_path": new_path,
+        "diff": "" if too_large else f"@@ -0,0 +1 @@\n+change in {new_path}\n",
+        "new_file": not renamed and not too_large,
+        "renamed_file": renamed,
+        "deleted_file": False,
+        "too_large": too_large,
+        "collapsed": False,
+    }
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="gitlab-mock")
+    parser.add_argument(
+        "--url", default=os.environ.get("GITLAB_MOCK_URL", "http://127.0.0.1:8080")
+    )
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    serve = sub.add_parser("serve")
+    serve.add_argument("--host", default="127.0.0.1")
+    serve.add_argument("--port", type=int, default=8080)
+    serve.add_argument("--token", default="mock-token")
+    serve.add_argument("--webhook-url")
+    serve.add_argument("--webhook-secret", default="")
+
+    open_ = sub.add_parser("open")
+    open_.add_argument("project_id", type=int)
+    open_.add_argument("author_id", type=int)
+    open_.add_argument("--title")
+    open_.add_argument("--file", action="append", default=[])
+    open_.add_argument("--rename", action="append", default=[], metavar="OLD:NEW")
+    open_.add_argument("--too-large", action="append", default=[], metavar="PATH")
+    open_.add_argument("--reviewer", type=int, action="append", default=[])
+
+    for name in ("approve", "request-changes", "assign"):
+        review = sub.add_parser(name)
+        review.add_argument("project_id", type=int)
+        review.add_argument("iid", type=int)
+        review.add_argument("user_id", type=int)
+
+    push = sub.add_parser("push")
+    push.add_argument("project_id", type=int)
+    push.add_argument("iid", type=int)
+
+    note = sub.add_parser("note")
+    note.add_argument("project_id", type=int)
+    note.add_argument("iid", type=int)
+    note.add_argument("user_id", type=int)
+    note.add_argument("text")
+
+    sub.add_parser("state")
+
+    webhooks = sub.add_parser("webhooks")
+    webhooks.add_argument("switch", choices=("on", "off"))
+
+    fail = sub.add_parser("fail")
+    fail.add_argument("count", type=int)
+    fail.add_argument("--status", type=int, default=500)
+    fail.add_argument("--timeout", action="store_true")
+    return parser
+
+
+def _request(args: argparse.Namespace) -> tuple[str, dict[str, Any]]:
+    """Return the control path and JSON body for a control command."""
+    command = args.command
+    if command == "open":
+        body = {"project_id": args.project_id, "author_id": args.author_id}
+        if args.title:
+            body["title"] = args.title
+        if args.reviewer:
+            body["reviewer_ids"] = args.reviewer
+        diffs = [_diff_for(path) for path in args.file]
+        diffs += [_diff_for(*pair.split(":", 1)) for pair in args.rename]
+        diffs += [_diff_for(path, too_large=True) for path in args.too_large]
+        if diffs:
+            body["diffs"] = diffs
+        return "/_mock/mrs", body
+    mr_path = f"/_mock/mrs/{getattr(args, 'project_id', 0)}/{getattr(args, 'iid', 0)}"
+    if command in ("approve", "request-changes"):
+        state = "approved" if command == "approve" else "requested_changes"
+        return f"{mr_path}/reviewers/{args.user_id}/state", {"state": state}
+    if command == "assign":
+        return f"{mr_path}/reviewers", {"user_id": args.user_id}
+    if command == "push":
+        return f"{mr_path}/push", {}
+    if command == "note":
+        return f"{mr_path}/notes", {"user_id": args.user_id, "note": args.text}
+    if command == "webhooks":
+        return "/_mock/webhooks", {"enabled": args.switch == "on"}
+    return "/_mock/fault", {
+        "count": args.count,
+        "status": args.status,
+        "timeout": args.timeout,
+    }
+
+
+def main() -> int:
+    args = _build_parser().parse_args()
+    if args.command == "serve":
+        app = create_app(args.token, args.webhook_url, args.webhook_secret)
+        uvicorn.run(app, host=args.host, port=args.port)
+        return 0
+    base = args.url.rstrip("/")
+    try:
+        if args.command == "state":
+            response = httpx.get(f"{base}/_mock/state", timeout=30)
+        else:
+            path, body = _request(args)
+            response = httpx.post(f"{base}{path}", json=body, timeout=30)
+        response.raise_for_status()
+    except httpx.HTTPError as error:
+        print(f"gitlab-mock: {error}", file=sys.stderr)
+        return 1
+    print(json.dumps(response.json(), indent=2))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

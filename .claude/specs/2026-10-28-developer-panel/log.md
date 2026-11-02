@@ -29,3 +29,6 @@ Fixed: [Medium] POST endpoints had no anonymous/unlinked access tests → subTes
 Accepted (reviewer judged, spec-consistent): only days with bookings listed; past leave listed; mockup handover notice dropped (non-goal); tests share builders from test_merge_requests.py.
 No re-review: no Confirmed Critical/High.
 Session 2: done. Project: all sessions done.
+
+## 2026-11-02 08:54 UTC — spec closed
+Session archived: /home/tabdeal/side-projects/merge-orchestrator/.claude/craft/archive/session-20261102T085450+0000.json

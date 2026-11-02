@@ -22,7 +22,8 @@ The AI gate reads a label that the AI Reviewer never sets. The real AI Reviewer 
 - No GitLab Free fallback. Several reviewers on one MR need Premium.
 - No webhook source-IP allow-list. The secret token stays the only check.
 - No review-session outcomes, merge routing or release (flows 3, 7, 8).
-- No contract test against a live GitLab. Tests use recorded payload shapes from the GitLab REST v4 docs. The first run at work is a manual smoke test.
+- No test against a live GitLab. Integration tests run against `gitlab_mock`, a small FastAPI service that mimics the GitLab REST v4 endpoints and webhooks the orchestrator uses, with shapes taken from the GitLab docs. respx stays for gateway error, timeout and pagination unit tests. The first run at work is a manual smoke test.
+- The mock is not a GitLab clone: no auth model beyond the token header, no permissions, no UI, no persistence across restarts.
 
 ## Acceptance criteria
 
@@ -39,11 +40,14 @@ The AI gate reads a label that the AI Reviewer never sets. The real AI Reviewer 
 | GLI-9 | WHEN reconciliation finds an open MR the orchestrator does not know, THE MR lifecycle SHALL create it exactly as for an `open` webhook. | CRITICAL BEHAVIOR | MRs opened during an ingress outage never enter the pipeline |
 | GLI-10 | WHILE one worker is running reconciliation, THE reconciler SHALL skip the run in every other worker. | IMPORTANT FAILURE MODE | Two replicas both page through GitLab and race on the cursor |
 | GLI-11 | IF a GitLab call fails during reconciliation, THEN THE reconciler SHALL keep that project's cursor unchanged, log the error, and let the worker go on. | IMPORTANT FAILURE MODE | An outage advances the cursor past MRs never read, or crashes the worker |
+| GLI-12 | WHEN an MR is opened in the mock GitLab and the AI Reviewer user approves it there, THE orchestrator SHALL, driven only by the mock's webhooks and its own worker, book reviewers and set them on the MR in the mock GitLab, keeping the AI Reviewer in the MR's reviewer list. | INTEGRATION CONTRACT | Each part works against stubs, but the real HTTP path (headers, payload shapes, reviewer merge) breaks end to end |
+| GLI-13 | IF the mock GitLab's webhooks for an MR are never delivered, THEN reconciliation against the mock SHALL bring the MR to the same booked state as GLI-12. | INTEGRATION CONTRACT | Reconciliation works on hand-built events but not on GitLab's real list response |
 
 Not tested, and why:
 - httpx connection pooling and TLS — FRAMEWORK BEHAVIOR
 - The settings loader picking the real gateway by dotted path — covered since the prototype (RMO contracts); one line
 - `post_note` raising `NotImplementedError` — no caller
+- `gitlab_mock` itself (routes, control API, CLI) — test scaffolding; exercised by GLI-12 and GLI-13
 
 ## Invariants
 
@@ -58,6 +62,7 @@ Not tested, and why:
 - Removed settings: `RMO_AI_PASS_LABEL`, `RMO_AI_FAIL_LABEL`. The label gate (prototype RMO-7) is replaced by GLI-5 and GLI-6.
 - `RMO_GITLAB_GATEWAY` can name `integrations.gitlab.GitLabRestGateway`. The fake stays the default.
 - New outbox kind `check_ai_review`.
+- New dev-only package `gitlab_mock/` (FastAPI + uvicorn, dev dependencies only), with a control API under `/_mock/` and a CLI `scripts/gitlab-mock` (`serve`, `open` with `--reviewer`, `assign`, `approve`, `request-changes`, `push`, `note`, `state`, `webhooks on|off`, `fail`).
 - New inbox source `reconcile`.
 - GitLab REST v4 endpoints used: MR diffs, MR reviewers (GET), MR update (PUT `reviewer_ids`), project MR list (`updated_after`, `state=opened`).
 - GitLab webhooks the orchestrator now reads: Merge Request Hook (`oldrev` for new commits) and Note Hook (on MRs).
