@@ -81,6 +81,7 @@ class GitLabWebhookTest(TestCase):
         """RMO-20: Given a valid token and a malformed body or too-long header,
         when a webhook arrives, then reply 400 and store no event."""
         mr_headers = {"HTTP_X_GITLAB_EVENT": "Merge Request Hook"}
+        note_headers = {"HTTP_X_GITLAB_EVENT": "Note Hook"}
         for name, body, headers in (
             ("not_an_object", "[1, 2]", {}),
             ("missing_project", '{"object_attributes": {"iid": 3}}', mr_headers),
@@ -93,6 +94,22 @@ class GitLabWebhookTest(TestCase):
                 "null_project_id",
                 '{"project": {"id": null}, "object_attributes": {"iid": 3}}',
                 mr_headers,
+            ),
+            (
+                "note_without_merge_request",
+                '{"project": {"id": 7}, "object_attributes": {"noteable_type": "MergeRequest"}}',
+                note_headers,
+            ),
+            (
+                "note_without_noteable_type",
+                '{"project": {"id": 7}, "merge_request": {"iid": 3}, "object_attributes": {}}',
+                note_headers,
+            ),
+            (
+                "note_without_iid",
+                '{"project": {"id": 7}, "merge_request": {},'
+                ' "object_attributes": {"noteable_type": "MergeRequest"}}',
+                note_headers,
             ),
             ("nan_constant", '{"x": NaN}', {}),
             ("uuid_too_long", "{}", {"HTTP_X_GITLAB_EVENT_UUID": "u" * 65}),

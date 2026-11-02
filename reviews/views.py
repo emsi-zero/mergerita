@@ -14,7 +14,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from integrations.inbox import store_event
-from reviews.lifecycle import MERGE_REQUEST_EVENT
+from reviews.lifecycle import MERGE_REQUEST_EVENT, NOTE_EVENT
 from reviews.models import AreaReview, MergeRequest
 from reviews.serializers import serialize_merge_request
 
@@ -23,16 +23,22 @@ MAX_FIELD_LENGTH = 64  # InboxEvent.event_uuid, event_kind and mr_key
 
 
 def _derive_mr_key(event_kind: str, payload: object) -> str | None:
-    """Return "<project_id>:<iid>" for a merge-request event, else None.
+    """Return "<project_id>:<iid>" for a merge-request or MR note event, else None.
 
     Raise ValueError, KeyError or TypeError when the payload is malformed.
     """
     if not isinstance(payload, dict):
         raise ValueError("payload is not a JSON object")
-    if event_kind != MERGE_REQUEST_EVENT:
+    if event_kind == MERGE_REQUEST_EVENT:
+        iid = payload["object_attributes"]["iid"]
+    elif (
+        event_kind == NOTE_EVENT
+        and payload["object_attributes"]["noteable_type"] == "MergeRequest"
+    ):
+        iid = payload["merge_request"]["iid"]
+    else:
         return None
     project_id = payload["project"]["id"]
-    iid = payload["object_attributes"]["iid"]
     for value in (project_id, iid):
         if not isinstance(value, int) or isinstance(value, bool) or value < 1:
             raise ValueError("project.id and iid must be positive integers")

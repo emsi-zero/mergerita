@@ -1,4 +1,6 @@
 import time
+from collections.abc import Callable
+from datetime import datetime
 from typing import Any
 
 import httpx
@@ -8,6 +10,11 @@ from django.core.exceptions import ImproperlyConfigured
 from integrations.adapters import Changes, MergeRequestPage, MergeRequestSummary
 
 PER_PAGE = 100
+# Texts of the system notes that GitLab writes for a review. The smoke test must
+# verify them on the real instance (spec open question).
+APPROVAL_NOTE_TEXT = "approved this merge request"
+CHANGES_NOTE_TEXT = "requested changes"
+VERDICT_TEXTS = (APPROVAL_NOTE_TEXT, CHANGES_NOTE_TEXT)
 
 
 class GitLabError(Exception):
@@ -79,6 +86,56 @@ class GitLabRestGateway:
         for reviewer in response.json():
             if reviewer["user"]["id"] == user_id:
                 return reviewer["state"]
+        return None
+
+    def get_latest_verdict_time(
+        self, project_id: int, iid: int, user_id: int
+    ) -> datetime | None:
+        """Return the time of the user's latest approval or change request, or None.
+
+        GitLab logs each of them as a system note authored by the reviewer.
+        """
+        return self._latest_note_time(
+            project_id,
+            iid,
+            lambda note: note["system"]
+            and note["author"]["id"] == user_id
+            and note["body"].strip().lower().startswith(VERDICT_TEXTS),
+        )
+
+    def get_latest_comment_time(
+        self, project_id: int, iid: int, user_id: int
+    ) -> datetime | None:
+        """Return the time of the user's latest plain (non-system) note, or None."""
+        return self._latest_note_time(
+            project_id,
+            iid,
+            lambda note: not note["system"] and note["author"]["id"] == user_id,
+        )
+
+    def _latest_note_time(
+        self, project_id: int, iid: int, matches: Callable[[dict], bool]
+    ) -> datetime | None:
+        """Page through the MR notes, newest first, and return the first match's time."""
+        deadline = _deadline()
+        path = f"/projects/{project_id}/merge_requests/{iid}/notes"
+        page: int | None = 1
+        while page is not None:
+            response = self._request(
+                "GET",
+                path,
+                deadline,
+                params={
+                    "sort": "desc",
+                    "order_by": "created_at",
+                    "per_page": PER_PAGE,
+                    "page": page,
+                },
+            )
+            for note in response.json():
+                if matches(note):
+                    return datetime.fromisoformat(note["created_at"])
+            page = _next_page(response, page, path)
         return None
 
     def list_open_merge_requests(

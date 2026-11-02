@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.db import models
+from django.db.models.functions import Now
 from django.utils import timezone
 
 
@@ -46,6 +47,8 @@ class MergeRequest(models.Model):
         default=MergeRequestState.AWAITING_AI_REVIEW,
     )
     opened_at = models.DateTimeField(default=timezone.now)
+    # When the MR last entered the AI gate: opened, or new commits pushed.
+    ai_gate_entered_at = models.DateTimeField(default=timezone.now, db_default=Now())
     changed_lines = models.PositiveIntegerField(default=0)
 
     class Meta:

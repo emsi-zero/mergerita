@@ -1,5 +1,6 @@
 import functools
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Protocol
 
 from django.conf import settings
@@ -45,6 +46,14 @@ class GitLabGatewayInterface(Protocol):
     def get_reviewer_state(
         self, project_id: int, iid: int, user_id: int
     ) -> str | None: ...
+
+    def get_latest_verdict_time(
+        self, project_id: int, iid: int, user_id: int
+    ) -> datetime | None: ...
+
+    def get_latest_comment_time(
+        self, project_id: int, iid: int, user_id: int
+    ) -> datetime | None: ...
 
     def list_open_merge_requests(
         self, project_id: int, updated_after: str | None, page: int

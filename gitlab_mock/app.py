@@ -21,6 +21,11 @@ REVIEWER_STATES = (
     "unapproved",
 )
 DEFAULT_TIMEOUT_FAULT_SECONDS = 30.0
+# System notes that GitLab writes when a reviewer approves or requests changes.
+VERDICT_NOTES = {
+    "approved": "approved this merge request",
+    "requested_changes": "requested changes",
+}
 
 
 def _now() -> str:
@@ -79,6 +84,21 @@ class MockState:  # pylint: disable=too-many-instance-attributes
         with self.lock:
             self._sha_counter += 1
             return f"{self._sha_counter:040x}"
+
+    def add_note(
+        self, mr: dict[str, Any], user_id: int, body: str, system: bool = False
+    ) -> None:
+        """Record a note by a user on the MR. A system note is how GitLab logs a review."""
+        with self.lock:
+            mr["notes"].append(
+                {
+                    "id": sum(len(m["notes"]) for m in self.mrs.values()) + 1,
+                    "body": body,
+                    "author": _user_dict(self.user(user_id)),
+                    "created_at": _now(),
+                    "system": system,
+                }
+            )
 
     def touch(self, mr: dict[str, Any]) -> None:
         """Set updated_at to now."""
@@ -165,6 +185,7 @@ class MockState:  # pylint: disable=too-many-instance-attributes
             "author_id": mr["author"]["id"],
             "title": mr["title"],
             "state": mr["state"],
+            "created_at": mr["created_at"],
             "updated_at": mr["updated_at"],
             **extra,
         }
@@ -245,6 +266,16 @@ def _api_router(state: MockState) -> APIRouter:
     ) -> list[dict[str, Any]]:
         return _paged(state.mr(project_id, iid)["diffs"], request, response)
 
+    @router.get("/projects/{project_id}/merge_requests/{iid}/notes")
+    def get_notes(
+        project_id: int, iid: int, request: Request, response: Response
+    ) -> list[dict[str, Any]]:
+        with state.lock:
+            notes = list(state.mr(project_id, iid)["notes"])
+        newest_first = request.query_params.get("sort", "desc") == "desc"
+        notes.sort(key=lambda n: (n["created_at"], n["id"]), reverse=newest_first)
+        return _paged(notes, request, response)
+
     @router.get(
         "/projects/{project_id}/merge_requests/{iid}/reviewers",
     )
@@ -314,6 +345,7 @@ def _control_router(state: MockState) -> APIRouter:
                     for user_id in body.get("reviewer_ids", [])
                 ],
                 "diffs": body.get("diffs", []),
+                "notes": [],
                 "sha": state.new_sha(),
                 "created_at": now,
                 "updated_at": now,
@@ -338,6 +370,12 @@ def _control_router(state: MockState) -> APIRouter:
             )
             if entry is None:
                 raise HTTPException(404, "user is not a reviewer")
+            state.add_note(
+                mr,
+                user_id,
+                VERDICT_NOTES.get(new_state, new_state),
+                system=new_state in VERDICT_NOTES,
+            )
             entry["state"] = new_state
             state.touch(mr)
             actor = entry["user"]
@@ -399,6 +437,7 @@ def _activity_router(state: MockState) -> APIRouter:
         mr = state.mr(project_id, iid)
         with state.lock:
             actor = state.user(body["user_id"])
+            state.add_note(mr, body["user_id"], body["note"])
             state.touch(mr)
             payload = state.note_hook(mr, actor, body["note"])
         state.send_webhook("Note Hook", payload)

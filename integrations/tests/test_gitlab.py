@@ -1,5 +1,6 @@
 import logging
 import traceback
+from datetime import UTC, datetime
 
 import httpx
 import respx
@@ -20,6 +21,18 @@ def _diff(old_path: str, new_path: str, diff: str, **flags: bool) -> dict:
         "too_large": False,
         "collapsed": False,
         **flags,
+    }
+
+
+def _note(
+    author_id: int, created_at: str, body: str = "x", system: bool = False
+) -> dict:
+    return {
+        "id": 1,
+        "body": body,
+        "author": {"id": author_id},
+        "created_at": created_at,
+        "system": system,
     }
 
 
@@ -45,7 +58,10 @@ class GitLabRestGatewayTest(SimpleTestCase):
         """GLI-1: Given an MR with 101 file diffs and a rename, when changes are
         read, then every path of both pages is returned, a rename gives both
         paths, and added plus removed lines are counted; a collapsed or too-large
-        diff sets too_large; a repeated next-page header raises GitLabError."""
+        diff sets too_large; a repeated next-page header raises GitLabError; the latest
+        verdict time and the latest comment time of a user are found on page 2
+        (system, plain, "unapproved" and other users' notes are skipped), or are
+        None when no note matches."""
         # given
         diffs = [
             _diff(f"f{i}.py", f"f{i}.py", "@@ -1 +1 @@\n-a\n+b\n") for i in range(100)
@@ -99,6 +115,81 @@ class GitLabRestGatewayTest(SimpleTestCase):
                     # when / then
                     with self.assertRaises(GitLabError):
                         gateway.get_changes(7, 1)
+
+        approval = "Approved this merge request"
+        for name, method, pages, expected in (
+            (
+                "verdict_on_page_2_skipping_plain_other_user_and_unapproved",
+                "get_latest_verdict_time",
+                [
+                    [
+                        _note(99, "2026-11-02T10:00:00.000Z", "looks good"),
+                        _note(5, "2026-11-02T09:30:00.000Z", approval, system=True),
+                        _note(
+                            99,
+                            "2026-11-02T09:00:00.000Z",
+                            "unapproved this merge request",
+                            system=True,
+                        ),
+                    ],
+                    [_note(99, "2026-11-02T08:00:00.000Z", approval, system=True)],
+                ],
+                datetime(2026, 11, 2, 8, tzinfo=UTC),
+            ),
+            (
+                "no_verdict",
+                "get_latest_verdict_time",
+                [
+                    [_note(99, "2026-11-02T09:00:00.000Z", "comment")],
+                    [_note(6, "2026-11-02T08:00:00.000Z", approval, system=True)],
+                ],
+                None,
+            ),
+            (
+                "comment_on_page_2_skipping_system_and_other_user",
+                "get_latest_comment_time",
+                [
+                    [
+                        _note(99, "2026-11-02T10:00:00.000Z", approval, system=True),
+                        _note(5, "2026-11-02T09:00:00.000Z", "hi"),
+                    ],
+                    [_note(99, "2026-11-02T08:00:00.000Z", "a comment")],
+                ],
+                datetime(2026, 11, 2, 8, tzinfo=UTC),
+            ),
+            (
+                "no_comment",
+                "get_latest_comment_time",
+                [
+                    [_note(99, "2026-11-02T09:00:00.000Z", approval, system=True)],
+                    [_note(6, "2026-11-02T08:00:00.000Z", "hi")],
+                ],
+                None,
+            ),
+        ):
+            with self.subTest(name):
+                # given
+                with respx.mock(base_url="https://gitlab.test/api/v4") as router:
+                    router.get("/projects/7/merge_requests/1/notes").mock(
+                        side_effect=[
+                            httpx.Response(
+                                200, json=pages[0], headers={"X-Next-Page": "2"}
+                            ),
+                            httpx.Response(
+                                200, json=pages[1], headers={"X-Next-Page": ""}
+                            ),
+                        ]
+                    )
+                    with override_settings(
+                        GITLAB_URL="https://gitlab.test", GITLAB_TOKEN=TOKEN
+                    ):
+                        gateway = GitLabRestGateway()
+
+                        # when
+                        found_time = getattr(gateway, method)(7, 1, 99)
+
+                # then
+                self.assertEqual(found_time, expected)
 
     def test_set_reviewer_keeps_existing_reviewers(self) -> None:
         """GLI-3: Given an MR with reviewer 99, when reviewer 21 is set, then the

@@ -1,13 +1,15 @@
-from datetime import date
+from datetime import date, timedelta
 from unittest import mock
 
 from django.test import TestCase, override_settings
+from django.utils import timezone
 
 from audit.models import AuditEvent
+from integrations import outbox
 from integrations.adapters import Changes
 from integrations.fakes import FakeGitLabGateway
 from integrations.inbox import store_event
-from reviews import area_resolver, booking
+from reviews import ai_gate, area_resolver, booking
 from reviews.models import (
     AreaReview,
     CodeArea,
@@ -21,16 +23,15 @@ from reviews.worker import process_next_event
 MONDAY = date(2026, 10, 26)
 
 
-def store_merge_request_event(uuid: str, action: str, labels: list[str]) -> None:
+def store_merge_request_event(uuid: str, action: str) -> None:
     payload = {
         "project": {"id": 7},
         "object_attributes": {"iid": 3, "action": action, "author_id": 11},
-        "labels": [{"title": label} for label in labels],
     }
     store_event("gitlab", uuid, "Merge Request Hook", "7:3", payload)
 
 
-@override_settings(RMO_INBOX_CLAIM_GRACE_SECONDS=0)
+@override_settings(RMO_INBOX_CLAIM_GRACE_SECONDS=0, RMO_AI_REVIEWER_GITLAB_USER_ID=99)
 class AuditTrailTest(TestCase):
     def test_every_state_change_and_booking_writes_an_audit_event(self) -> None:
         """RMO-17: Given an MR that is opened, passes AI review, gets its area
@@ -48,20 +49,23 @@ class AuditTrailTest(TestCase):
         Ownership.objects.create(person=reviewer, area=area, role=OwnerRole.PRIMARY)
         gateway = FakeGitLabGateway()
         gateway.changes[(7, 3)] = Changes(files=["api/a.py"], changed_lines=9)
+        gateway.reviewer_states[(7, 3, 99)] = "approved"
+        gateway.latest_verdict_times[(7, 3, 99)] = timezone.now() + timedelta(hours=1)
         for target, name, value in (
+            (ai_gate, "get_gitlab_gateway", gateway),
             (area_resolver, "get_gitlab_gateway", gateway),
             (booking.timezone, "localdate", MONDAY),
         ):
             patcher = mock.patch.object(target, name, return_value=value)
             patcher.start()
             self.addCleanup(patcher.stop)
-        store_merge_request_event("u-1", "open", [])
-        store_merge_request_event("u-2", "update", ["ai-review::passed"])
+        store_merge_request_event("u-1", "open")
+        store_merge_request_event("u-2", "approval")
 
         # when
         process_next_event()
         process_next_event()
-        area_resolver.resolve_areas({"merge_request_id": MergeRequest.objects.get().pk})
+        outbox.dispatch_due()
 
         # then
         merge_request = MergeRequest.objects.get()

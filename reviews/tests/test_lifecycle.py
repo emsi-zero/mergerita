@@ -2,12 +2,10 @@ from unittest import mock
 
 from django.test import TestCase
 
-from integrations import outbox
 from integrations.adapters import Changes
 from integrations.fakes import FakeGitLabGateway
-from integrations.models import InboxEvent, OutboxCall
+from integrations.models import OutboxCall
 from reviews import area_resolver
-from reviews.lifecycle import handle_event
 from reviews.models import (
     AreaReview,
     CodeArea,
@@ -15,17 +13,6 @@ from reviews.models import (
     MergeRequestState,
     Person,
 )
-
-
-def label_event(iid: int, labels: list[str]) -> InboxEvent:
-    return InboxEvent(
-        event_kind="Merge Request Hook",
-        payload={
-            "project": {"id": 7},
-            "object_attributes": {"iid": iid, "action": "update"},
-            "labels": [{"title": label} for label in labels],
-        },
-    )
 
 
 class LifecycleTest(TestCase):
@@ -46,42 +33,6 @@ class LifecycleTest(TestCase):
         return MergeRequest.objects.create(
             project_id=7, iid=iid, author=self.author, title="MR", state=state
         )
-
-    def test_ai_review_label_moves_merge_request(self) -> None:
-        """RMO-7: Given an MR awaiting AI review, when it gets the pass label,
-        then it awaits booking and gets its area reviews; when it gets the fail
-        label, or both labels, then it waits on the author."""
-        for iid, name, labels, expected_state, expected_reviews in (
-            (3, "pass", ["ai-review::passed"], MergeRequestState.AWAITING_BOOKING, 1),
-            (4, "fail", ["ai-review::failed"], MergeRequestState.WAITING_ON_AUTHOR, 0),
-            (
-                5,
-                "both",
-                ["ai-review::passed", "ai-review::failed"],
-                MergeRequestState.WAITING_ON_AUTHOR,
-                0,
-            ),
-        ):
-            with self.subTest(name=name):
-                # given
-                merge_request = self.create_merge_request(
-                    iid, MergeRequestState.AWAITING_AI_REVIEW
-                )
-                self.gateway.changes[(7, iid)] = Changes(
-                    files=["api/a.py"], changed_lines=10
-                )
-
-                # when
-                handle_event(label_event(iid, labels))
-                outbox.dispatch_due()
-
-                # then
-                merge_request.refresh_from_db()
-                self.assertEqual(merge_request.state, expected_state)
-                self.assertEqual(
-                    AreaReview.objects.filter(merge_request=merge_request).count(),
-                    expected_reviews,
-                )
 
     def test_oversized_merge_request_queues_size_warning(self) -> None:
         """RMO-8: Given an MR with more changed lines than the limit of an area

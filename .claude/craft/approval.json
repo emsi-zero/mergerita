@@ -89,6 +89,33 @@
       "approved_by": "developer",
       "note": "",
       "session_id": null
+    },
+    {
+      "kind": "spec",
+      "spec": "2026-10-26-gitlab-integration",
+      "sha256": "ba5ee064f32beb0527f1d328254cd88cc73de2f85deda4f6606846b27cdad409",
+      "approved_at": "2026-11-02T12:54:01+00:00",
+      "approved_by": "developer",
+      "note": "",
+      "session_id": null
+    },
+    {
+      "kind": "spec",
+      "spec": "2026-10-26-gitlab-integration",
+      "sha256": "e765594eeb0532b993eca9656a4ef75f1488ff27f4b9ba0c32666f56f09df5ab",
+      "approved_at": "2026-11-02T13:11:06+00:00",
+      "approved_by": "developer",
+      "note": "",
+      "session_id": null
+    },
+    {
+      "kind": "spec",
+      "spec": "2026-10-26-gitlab-integration",
+      "sha256": "287922b48d06f36b7649fa2795e990ddeda0d8eb8ed9a7f2bb78b0ba84827528",
+      "approved_at": "2026-11-02T13:46:37+00:00",
+      "approved_by": "developer",
+      "note": "",
+      "session_id": null
     }
   ]
 }

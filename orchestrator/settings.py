@@ -83,8 +83,11 @@ RMO_SLOT_MINUTES = 60
 RMO_DEFAULT_DAILY_BUDGET_MINUTES = 120
 RMO_BOOKING_HORIZON_DAYS = 10
 RMO_DAILY_BUDGET_CHOICES = [60, 120, 180, 240]
-RMO_AI_PASS_LABEL = "ai-review::passed"
-RMO_AI_FAIL_LABEL = "ai-review::failed"
+# GitLab user id of the AI Reviewer bot. No default: the AI-review check raises when unset.
+_AI_REVIEWER_USER_ID = os.environ.get("RMO_AI_REVIEWER_GITLAB_USER_ID")
+RMO_AI_REVIEWER_GITLAB_USER_ID = (
+    int(_AI_REVIEWER_USER_ID) if _AI_REVIEWER_USER_ID else None
+)
 RMO_COVERAGE_POLICY = "strict"  # "strict" or "combined"
 # Weekday numbers follow datetime.weekday(): Monday is 0. Saturday to Wednesday.
 RMO_DEFAULT_WORKING_DAYS = [5, 6, 0, 1, 2]
@@ -103,5 +106,7 @@ RMO_GITLAB_TIMEOUT_SECONDS = 10  # below RMO_OUTBOX_LEASE_SECONDS
 # Whole-call deadline of one gateway method. The deadline plus one request timeout
 # (RMO_GITLAB_TIMEOUT_SECONDS) must stay below RMO_OUTBOX_LEASE_SECONDS.
 RMO_GITLAB_CALL_DEADLINE_SECONDS = 45
-RMO_GITLAB_GATEWAY = "integrations.fakes.FakeGitLabGateway"
+RMO_GITLAB_GATEWAY = os.environ.get(
+    "RMO_GITLAB_GATEWAY", "integrations.fakes.FakeGitLabGateway"
+)
 RMO_NOTIFIER = "integrations.fakes.FakeNotifier"

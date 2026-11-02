@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from integrations.adapters import Changes, MergeRequestPage
 
 
@@ -7,6 +9,8 @@ class FakeGitLabGateway:
     def __init__(self) -> None:
         self.changes: dict[tuple[int, int], Changes] = {}
         self.reviewer_states: dict[tuple[int, int, int], str] = {}
+        self.latest_verdict_times: dict[tuple[int, int, int], datetime] = {}
+        self.latest_comment_times: dict[tuple[int, int, int], datetime] = {}
         self.open_merge_requests: dict[int, MergeRequestPage] = {}
         self.calls: list[tuple] = []
 
@@ -20,6 +24,16 @@ class FakeGitLabGateway:
 
     def get_reviewer_state(self, project_id: int, iid: int, user_id: int) -> str | None:
         return self.reviewer_states.get((project_id, iid, user_id))
+
+    def get_latest_verdict_time(
+        self, project_id: int, iid: int, user_id: int
+    ) -> datetime | None:
+        return self.latest_verdict_times.get((project_id, iid, user_id))
+
+    def get_latest_comment_time(
+        self, project_id: int, iid: int, user_id: int
+    ) -> datetime | None:
+        return self.latest_comment_times.get((project_id, iid, user_id))
 
     def list_open_merge_requests(  # pylint: disable=unused-argument
         self, project_id: int, updated_after: str | None, page: int
