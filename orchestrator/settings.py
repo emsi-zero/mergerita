@@ -75,6 +75,8 @@ REST_FRAMEWORK = {
 }
 
 GITLAB_WEBHOOK_TOKEN = os.environ.get("GITLAB_WEBHOOK_TOKEN", "")
+GITLAB_URL = os.environ.get("GITLAB_URL", "")
+GITLAB_TOKEN = os.environ.get("GITLAB_TOKEN", "")
 
 # Review rules.
 RMO_SLOT_MINUTES = 60
@@ -97,5 +99,9 @@ RMO_OUTBOX_BACKOFF_SECONDS = 30
 RMO_OUTBOX_LEASE_SECONDS = 60
 
 # Adapters, as dotted paths to classes. The prototype points at the fakes.
+RMO_GITLAB_TIMEOUT_SECONDS = 10  # below RMO_OUTBOX_LEASE_SECONDS
+# Whole-call deadline of one gateway method. The deadline plus one request timeout
+# (RMO_GITLAB_TIMEOUT_SECONDS) must stay below RMO_OUTBOX_LEASE_SECONDS.
+RMO_GITLAB_CALL_DEADLINE_SECONDS = 45
 RMO_GITLAB_GATEWAY = "integrations.fakes.FakeGitLabGateway"
 RMO_NOTIFIER = "integrations.fakes.FakeNotifier"

@@ -7,3 +7,4 @@ black>=24
 isort>=5.13
 pylint>=3.2
 pylint-django>=2.6
+httpx>=0.27

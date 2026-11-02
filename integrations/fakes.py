@@ -1,4 +1,4 @@
-from integrations.adapters import Changes
+from integrations.adapters import Changes, MergeRequestPage
 
 
 class FakeGitLabGateway:
@@ -6,6 +6,8 @@ class FakeGitLabGateway:
 
     def __init__(self) -> None:
         self.changes: dict[tuple[int, int], Changes] = {}
+        self.reviewer_states: dict[tuple[int, int, int], str] = {}
+        self.open_merge_requests: dict[int, MergeRequestPage] = {}
         self.calls: list[tuple] = []
 
     def get_changes(self, project_id: int, iid: int) -> Changes:
@@ -15,6 +17,14 @@ class FakeGitLabGateway:
         self, project_id: int, iid: int, reviewer_gitlab_user_id: int
     ) -> None:
         self.calls.append(("set_reviewer", project_id, iid, reviewer_gitlab_user_id))
+
+    def get_reviewer_state(self, project_id: int, iid: int, user_id: int) -> str | None:
+        return self.reviewer_states.get((project_id, iid, user_id))
+
+    def list_open_merge_requests(  # pylint: disable=unused-argument
+        self, project_id: int, updated_after: str | None, page: int
+    ) -> MergeRequestPage:
+        return self.open_merge_requests.get(project_id, MergeRequestPage([], None))
 
     def post_note(self, project_id: int, iid: int, body: str) -> None:
         self.calls.append(("post_note", project_id, iid, body))

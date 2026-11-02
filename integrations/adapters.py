@@ -12,6 +12,25 @@ class Changes:
 
     files: list[str]
     changed_lines: int
+    too_large: bool = False
+
+
+@dataclass(frozen=True)
+class MergeRequestSummary:
+    """The fields of one open merge request that reconciliation reads."""
+
+    iid: int
+    updated_at: str
+    author_id: int
+    title: str
+
+
+@dataclass(frozen=True)
+class MergeRequestPage:
+    """One page of open merge requests. `next_page` is None on the last page."""
+
+    merge_requests: list[MergeRequestSummary]
+    next_page: int | None
 
 
 class GitLabGatewayInterface(Protocol):
@@ -22,6 +41,14 @@ class GitLabGatewayInterface(Protocol):
     def set_reviewer(
         self, project_id: int, iid: int, reviewer_gitlab_user_id: int
     ) -> None: ...
+
+    def get_reviewer_state(
+        self, project_id: int, iid: int, user_id: int
+    ) -> str | None: ...
+
+    def list_open_merge_requests(
+        self, project_id: int, updated_after: str | None, page: int
+    ) -> MergeRequestPage: ...
 
     def post_note(self, project_id: int, iid: int, body: str) -> None: ...
 

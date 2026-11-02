@@ -21,18 +21,18 @@ Resume: `gitlab_mock` runs standalone and in tests (`running_mock()` in `gitlab_
 
 ## Session 2 — Real GitLab REST gateway
 
-State: pending · Covers: GLI-1, GLI-2, GLI-3, GLI-4
+State: done · Covers: GLI-1, GLI-2, GLI-3, GLI-4
 
-- [ ] T1 — Add `httpx` to `requirements.txt` (respx is already in `requirements-dev.txt`). Add `GITLAB_URL`, `GITLAB_TOKEN` (environment) and `RMO_GITLAB_TIMEOUT_SECONDS = 10` to `orchestrator/settings.py` — contracts
-- [ ] T2 — In `integrations/adapters.py`, add `too_large: bool = False` to `Changes`, and add `get_reviewer_state` and `list_open_merge_requests` (with a small `MergeRequestPage` / `MergeRequestSummary` dataclass) to `GitLabGatewayInterface`. Implement both in `integrations/fakes.py` (seedable dicts) — GLI-1, GLI-6, GLI-8
-- [ ] T3 — Add `integrations/gitlab.py`: `GitLabError`, and `GitLabRestGateway` with `get_changes` (paged diffs, renames, line count, `too_large`), `set_reviewer` (GET then PUT, keep existing, no-op if present), `get_reviewer_state`, `list_open_merge_requests`, and `post_note` raising `NotImplementedError`. The constructor checks `GITLAB_URL`/`GITLAB_TOKEN`. Errors are built from method, path and status only — GLI-1, GLI-3, GLI-4, INV-3
-- [ ] T4 — In `reviews/area_resolver.py`, treat `changes.too_large` as over the size limit — GLI-2
-- [ ] T5 — Tests in `integrations/tests/test_gitlab.py` (respx) for GLI-1, GLI-3, GLI-4, and a GLI-2 test in `reviews/tests/test_area_resolver.py`
+- [x] T1 — Add `httpx` to `requirements.txt` (respx is already in `requirements-dev.txt`). Add `GITLAB_URL`, `GITLAB_TOKEN` (environment) and `RMO_GITLAB_TIMEOUT_SECONDS = 10` to `orchestrator/settings.py` — contracts
+- [x] T2 — In `integrations/adapters.py`, add `too_large: bool = False` to `Changes`, and add `get_reviewer_state` and `list_open_merge_requests` (with a small `MergeRequestPage` / `MergeRequestSummary` dataclass) to `GitLabGatewayInterface`. Implement both in `integrations/fakes.py` (seedable dicts) — GLI-1, GLI-6, GLI-8
+- [x] T3 — Add `integrations/gitlab.py`: `GitLabError`, and `GitLabRestGateway` with `get_changes` (paged diffs, renames, line count, `too_large`), `set_reviewer` (GET then PUT, keep existing, no-op if present), `get_reviewer_state`, `list_open_merge_requests`, and `post_note` raising `NotImplementedError`. The constructor checks `GITLAB_URL`/`GITLAB_TOKEN`. Errors are built from method, path and status only — GLI-1, GLI-3, GLI-4, INV-3
+- [x] T4 — In `reviews/area_resolver.py`, treat `changes.too_large` as over the size limit — GLI-2
+- [x] T5 — Tests in `integrations/tests/test_gitlab.py` (respx) for GLI-1, GLI-3, GLI-4, and a GLI-2 test in `reviews/tests/test_area_resolver.py`
 
 Gate A: `bin/craft-spec trace --session 2` green · checkpoint green through `bin/craft-check` · pylint, isort, black green
 Gate B: `reviewer` (lenses: spec, style) · `deep-reviewer` (logic, security on INV-3 and the reviewer merge)
 
-Resume: `GitLabRestGateway` exists and is selectable by `RMO_GITLAB_GATEWAY`; the fake stays the default. Next: Session 3, the AI gate.
+Resume: `GitLabRestGateway` exists and is selectable by `RMO_GITLAB_GATEWAY`; the fake stays the default. Next: Session 3, the AI gate. Gateway tests need no DB (SimpleTestCase) and use `running_mock` plus respx.
 
 ## Session 3 — AI gate on the bot's review state
 

@@ -34,3 +34,20 @@ tests `scripts/test.sh -q` PASS (36 passed, 60 subtests; 4 mock smoke tests) · 
 ## 2026-11-02 — Session 1 Gate B
 reviewer (spec, style): APPROVE. Medium (`assign` outside the contract) → spec delta approved. Fixed Lows: PUT `title` branch dropped; `unapproved` state added; CLI `--rename` and `--too-large`; typing; docstrings.
 Session 1: done.
+
+## 2026-11-02 — spec delta: per-call deadline
+Contracts: new setting `RMO_GITLAB_CALL_DEADLINE_SECONDS` (45). Why: Session 2 deep-review Medium — the 10 s httpx timeout bounds one phase of one request, so a many-page call could outlive the 60 s outbox lease and be re-run by another worker. Approved by the developer.
+
+## 2026-11-02 10:47 UTC — spec delta approved
+sha256 9647bfdbd6fd
+
+## 2026-11-02 — Session 2 (gateway) Gate A
+tests `scripts/test.sh -q` PASS (41 passed, 68 subtests) · pylint 10.00 PASS · isort PASS · black PASS · `craft-spec trace --session 2` PASS (4/4)
+
+## 2026-11-02 — Session 2 Gate B
+reviewer (spec, style): COMMENT, Medium (gateway too_large/collapsed mapping untested) → fixed. deep-reviewer (logic, security): REQUEST_CHANGES.
+[High, confirmed] set_reviewer GET-then-PUT lost a reviewer when two workers ran calls for one MR → per-MR session-level advisory lock in the handler; two-thread test against the mock fails without the lock (verified by deep-reviewer). Delta re-review: High closed.
+Re-review Mediums fixed (no further re-review needed, Gate A only): blocking lock wait spent the lease → `pg_try_advisory_lock` + retryable `ReviewerLockBusy`; per-request timeout capped by the time left before the deadline.
+Other fixes: pagination guard (next page must advance); per-call deadline `RMO_GITLAB_CALL_DEADLINE_SECONDS` (spec delta approved); `split("\n")`; https-only `GITLAB_URL` unless DEBUG; docstrings.
+Deferred: MR-level diff overflow (`changes_count` "1000+") — check on the work GitLab in the smoke test (Session 4 T6). Fake's single page for `list_open_merge_requests` — Session 4 seeds next_page=None or extends the fake. PgBouncer transaction pooling breaks session advisory locks — documented at the lock.
+Session 2: done.

@@ -61,7 +61,9 @@ def _resolve(merge_request: MergeRequest, changes: Changes) -> None:
         return
     merge_request.save(update_fields=["changed_lines"])
 
-    if any(changes.changed_lines > area.size_limit_lines for area in touched.values()):
+    if changes.too_large or any(
+        changes.changed_lines > area.size_limit_lines for area in touched.values()
+    ):
         queue_notification(
             [merge_request.author.gitlab_user_id],
             f"MR {merge_request.project_id}:{merge_request.iid} has "

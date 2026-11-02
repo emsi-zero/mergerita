@@ -4,6 +4,7 @@ from django.test import TestCase, override_settings
 
 from integrations.adapters import Changes
 from integrations.fakes import FakeGitLabGateway
+from integrations.models import OutboxCall
 from reviews import area_resolver
 from reviews.models import (
     AreaReview,
@@ -36,6 +37,7 @@ class AreaResolverTest(TestCase):
         gateway.changes[(7, 3)] = Changes(
             files=["api/a.py", "web/b.js"], changed_lines=9
         )
+        self.gateway = gateway
         patcher = mock.patch.object(
             area_resolver, "get_gitlab_gateway", return_value=gateway
         )
@@ -93,3 +95,22 @@ class AreaResolverTest(TestCase):
                 self.assertEqual(
                     AreaReview.objects.first().areas.count(), 2 // expected_reviews
                 )
+
+    def test_too_large_diff_queues_the_size_warning(self) -> None:
+        """GLI-2: Given GitLab marks a file diff as too large, when areas are
+        resolved, then the size warning is queued although the counted lines
+        are under the limit."""
+        # given
+        self.own(21, self.api, self.web)
+        self.gateway.changes[(7, 3)] = Changes(
+            files=["api/a.py"], changed_lines=9, too_large=True
+        )
+
+        # when
+        area_resolver.resolve_areas({"merge_request_id": self.merge_request.pk})
+
+        # then
+        warnings = OutboxCall.objects.filter(
+            kind="notify", payload__gitlab_user_ids=[11]
+        )
+        self.assertEqual(warnings.count(), 1)

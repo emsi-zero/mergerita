@@ -80,6 +80,15 @@
       "approved_by": "developer",
       "note": "",
       "session_id": null
+    },
+    {
+      "kind": "spec",
+      "spec": "2026-10-26-gitlab-integration",
+      "sha256": "9647bfdbd6fd426d922caaa89ce7d37db161956306cb8a16950222fb81936125",
+      "approved_at": "2026-11-02T10:47:41+00:00",
+      "approved_by": "developer",
+      "note": "",
+      "session_id": null
     }
   ]
 }

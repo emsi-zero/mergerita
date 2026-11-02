@@ -58,7 +58,7 @@ Not tested, and why:
 
 ## Contracts
 
-- New settings: `GITLAB_URL`, `GITLAB_TOKEN` (environment), `RMO_GITLAB_TIMEOUT_SECONDS` (default 10, below `RMO_OUTBOX_LEASE_SECONDS`), `RMO_AI_REVIEWER_GITLAB_USER_ID`, `RMO_GITLAB_PROJECT_IDS`, `RMO_RECONCILE_INTERVAL_SECONDS` (default 300).
+- New settings: `GITLAB_URL`, `GITLAB_TOKEN` (environment), `RMO_GITLAB_TIMEOUT_SECONDS` (default 10, per request), `RMO_GITLAB_CALL_DEADLINE_SECONDS` (default 45, one whole gateway call across all its requests; must stay below `RMO_OUTBOX_LEASE_SECONDS`), `RMO_AI_REVIEWER_GITLAB_USER_ID`, `RMO_GITLAB_PROJECT_IDS`, `RMO_RECONCILE_INTERVAL_SECONDS` (default 300).
 - Removed settings: `RMO_AI_PASS_LABEL`, `RMO_AI_FAIL_LABEL`. The label gate (prototype RMO-7) is replaced by GLI-5 and GLI-6.
 - `RMO_GITLAB_GATEWAY` can name `integrations.gitlab.GitLabRestGateway`. The fake stays the default.
 - New outbox kind `check_ai_review`.
