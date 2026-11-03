@@ -17,7 +17,38 @@ python3 -m venv --without-pip .venv
 <any python with pip> -m pip --python .venv/bin/python install pip -r requirements.txt
 ```
 
-`Dockerfile` and `docker-compose.yml` exist, but they have not been built yet. Docker Hub pulls were blocked on the development machine.
+## Run it with Docker Compose
+
+One command starts PostgreSQL, the migrations, the web app (http://127.0.0.1:8000), the worker, and the mock GitLab (http://127.0.0.1:8080). The web app and worker use the real GitLab client, pointed at the mock. The AI Reviewer is mock user 90, and project 7 is reconciled.
+
+```bash
+docker compose up --build                      # Ctrl-C to stop; add -d to run in the background
+docker compose run --rm web python manage.py createsuperuser
+docker compose run --rm tests                  # the test suite, against the compose database
+docker compose down -v                         # stop and delete the database volume
+```
+
+Drive the mock from inside its container: `docker compose exec gitlab-mock python scripts/gitlab-mock open 7 11 --reviewer 90 --file api/a.py`, then `… approve 7 1 90`. People, code areas and ownership are added in the admin, or with the seed snippet in `docs/testing.md` §3, piped in with `docker compose exec -T web python manage.py shell`.
+
+Two environment variables cover machines where Docker cannot work out of the box:
+- `PYTHON_IMAGE` and `POSTGRES_IMAGE` take the base images from a registry mirror, for example `PYTHON_IMAGE=registry.example.com/library/python:3.12-slim`, when Docker Hub is blocked.
+- `COMPOSE_SUBNET` (default `10.252.10.0/24`) changes the stack's network if that range clashes with your VPN.
+- `WEB_PORT` and `MOCK_PORT` (defaults 8000 and 8080) change the published ports, for example `WEB_PORT=8010 MOCK_PORT=8090 docker compose up -d` when a host demo already uses them.
+
+**Behind a VPN that captures private ranges** (for example Cisco AnyConnect, with `ip route` showing `10.0.0.0/8 dev cscotun0`), containers on Docker networks are unreachable and nothing loads. Use the host-network override instead; the services then listen on 127.0.0.1, with Postgres on port 55432 (`DB_PORT`):
+
+```bash
+cd ~/side-projects/merge-orchestrator
+export COMPOSE_FILE=docker-compose.yml:docker-compose.host.yml WEB_PORT=8010 MOCK_PORT=8090
+docker compose up -d
+docker compose run --rm web python manage.py createsuperuser
+# then open http://127.0.0.1:8010/admin/ ; drive the mock with
+docker compose exec gitlab-mock python scripts/gitlab-mock --url http://127.0.0.1:8090 open 7 11 --reviewer 90 --file api/a.py
+```
+
+Run every `docker compose` command from the project folder. Elsewhere it stops with "no configuration file provided".
+
+The image is built on the host network, because containers on the default bridge may have no DNS, and pip must reach PyPI. Only the build needs the internet.
 
 ## Run it
 

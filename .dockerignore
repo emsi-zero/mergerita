@@ -1,0 +1,8 @@
+.git
+.venv
+.pgsock
+.pytest_cache
+**/__pycache__
+*.pyc
+.claude
+.env

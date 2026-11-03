@@ -1,0 +1,45 @@
+# Host-network override, for machines where a VPN (for example Cisco AnyConnect)
+# routes every private range into its tunnel, so Docker bridge networks and their
+# published ports are unreachable. Services listen on the host's loopback instead.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.host.yml up -d
+#
+# Ports: WEB_PORT (default 8000), MOCK_PORT (default 8080), DB_PORT (default 55432).
+
+x-host-app: &host-app
+  network_mode: host
+  environment:
+    DB_HOST: 127.0.0.1
+    DB_PORT: ${DB_PORT:-55432}
+    GITLAB_URL: http://127.0.0.1:${MOCK_PORT:-8080}
+
+services:
+  db:
+    network_mode: host
+    command: postgres -p ${DB_PORT:-55432} -c listen_addresses=127.0.0.1
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p ${DB_PORT:-55432} -U orchestrator -d orchestrator"]
+
+  migrate:
+    <<: *host-app
+
+  web:
+    <<: *host-app
+    command: python manage.py runserver 127.0.0.1:${WEB_PORT:-8000}
+    ports: !reset []
+
+  worker:
+    <<: *host-app
+
+  gitlab-mock:
+    <<: *host-app
+    command: >
+      python scripts/gitlab-mock serve --host 127.0.0.1 --port ${MOCK_PORT:-8080} --token mock-token
+      --webhook-url http://127.0.0.1:${WEB_PORT:-8000}/webhooks/gitlab/ --webhook-secret dev-token
+    ports: !reset []
+
+  tests:
+    network_mode: host
+    environment:
+      DB_HOST: 127.0.0.1
+      DB_PORT: ${DB_PORT:-55432}
