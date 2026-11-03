@@ -7,7 +7,7 @@ fields that the orchestrator reads. Routes under /_mock/ control the mock.
 import threading
 import time
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
@@ -29,8 +29,18 @@ VERDICT_NOTES = {
 }
 
 
+_clock_lock = threading.Lock()
+_last_tick = datetime.min.replace(tzinfo=UTC)
+
+
 def _now() -> str:
-    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+    """Return a timestamp at least 1 ms after the previous one, so events never tie."""
+    global _last_tick  # pylint: disable=global-statement
+    with _clock_lock:
+        current = datetime.now(UTC)
+        now = current.replace(microsecond=current.microsecond // 1000 * 1000)
+        _last_tick = max(now, _last_tick + timedelta(milliseconds=1))
+        return _last_tick.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
 
 
 def _parse_time(value: str) -> datetime:

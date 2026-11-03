@@ -12,6 +12,8 @@ from reviews.models import (
     CodeArea,
     MergeRequestState,
     Person,
+    ReviewSession,
+    ReviewSessionOutcome,
 )
 
 
@@ -104,3 +106,78 @@ class MyReviewsTests(TestCase):
             count=1,
             html=True,
         )
+
+    def test_rvo_9_lists_follow_ups_first_with_outcome_buttons_or_the_outcome(  # pylint: disable=too-many-locals
+        self,
+    ):
+        """RVO-9: Given a follow-up session, a new session and a closed session on
+        one day, when I open My reviews, then the follow-up is listed before the
+        others, pending sessions show Done, Need more time and Hand back, and the
+        closed one shows its outcome instead.
+        """
+        me = create_person(1, "Me", "me")
+        author = create_person(3, "Author Ann", "ann")
+        area = CodeArea.objects.create(name="payments", size_limit_lines=300)
+        today = timezone.localdate()
+        sessions = {}
+        for iid, title, outcome, is_continuation in (
+            (1, "Plain review", ReviewSessionOutcome.PENDING, False),
+            (2, "Closed review", ReviewSessionOutcome.DONE, False),
+            (3, "Later follow-up", ReviewSessionOutcome.PENDING, True),
+        ):
+            merge_request = create_merge_request(
+                author, iid, title, MergeRequestState.IN_REVIEW
+            )
+            review = book(me, merge_request, area, today, "reason")
+            sessions[iid] = ReviewSession.objects.create(
+                area_review=review,
+                reviewer=me,
+                day=today,
+                slot_minutes=60,
+                outcome=outcome,
+                is_continuation=is_continuation,
+            )
+        panel_login(self.client, me.user)
+
+        response = self.client.get("/panel/reviews/")
+
+        self.assertRegex(
+            response.content.decode(), r"(?s)Later follow-up.*Plain review"
+        )
+        self.assertContains(response, "Follow-up</span>", count=1)
+        for iid in (1, 3):
+            self.assertContains(response, f"/panel/sessions/{sessions[iid].pk}/done/")
+            self.assertContains(
+                response, f"/panel/sessions/{sessions[iid].pk}/more-time/"
+            )
+            self.assertContains(
+                response, f"/panel/sessions/{sessions[iid].pk}/hand-back/"
+            )
+        self.assertNotContains(response, f"/panel/sessions/{sessions[2].pk}/")
+        self.assertContains(
+            response, '<span class="badge booking">Done</span>', count=1, html=True
+        )
+        with self.subTest(name="overdue_first"):
+            # given
+            missed_mr = create_merge_request(
+                author, 4, "Missed review", MergeRequestState.IN_REVIEW
+            )
+            missed_review = book(me, missed_mr, area, today - timedelta(days=2), "r")
+            missed = ReviewSession.objects.create(
+                area_review=missed_review,
+                reviewer=me,
+                day=today - timedelta(days=2),
+                slot_minutes=60,
+            )
+
+            # when
+            overdue_page = self.client.get("/panel/reviews/")
+
+            # then
+            self.assertRegex(
+                overdue_page.content.decode(),
+                r"(?s)Overdue.*Missed review.*Later follow-up",
+            )
+            self.assertContains(overdue_page, f"/panel/sessions/{missed.pk}/done/")
+            self.assertContains(overdue_page, f"/panel/sessions/{missed.pk}/more-time/")
+            self.assertContains(overdue_page, f"/panel/sessions/{missed.pk}/hand-back/")

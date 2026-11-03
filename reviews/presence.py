@@ -61,6 +61,36 @@ def request_presence(
         return True
 
 
+def withdraw_active_presence(review: AreaReview, reviewer: Person, actor: str) -> bool:
+    """Withdraw the active request of a locked area review, with audit and chat.
+
+    Return False when no request is active. The caller owns the transaction.
+    `reviewer` is named in the chat message to the author.
+    """
+    presence = review.presence_requests.filter(
+        state=PresenceRequestState.ACTIVE
+    ).first()
+    if presence is None:
+        return False
+    presence.state = PresenceRequestState.WITHDRAWN
+    presence.withdrawn_at = timezone.now()
+    presence.save(update_fields=["state", "withdrawn_at"])
+    merge_request = review.merge_request
+    record(
+        actor,
+        "presence.withdrawn",
+        presence,
+        {"state": PresenceRequestState.ACTIVE},
+        {"state": PresenceRequestState.WITHDRAWN},
+    )
+    queue_notification(
+        [merge_request.author.gitlab_user_id],
+        f"{reviewer.name} no longer needs you at the review of "
+        f"!{merge_request.iid} on {review.booked_day.isoformat()}.",
+    )
+    return True
+
+
 def withdraw_presence(reviewer: Person, area_review_id: int, actor: str) -> bool:
     """Withdraw the active request, with one audit event and one chat message.
 
@@ -69,26 +99,4 @@ def withdraw_presence(reviewer: Person, area_review_id: int, actor: str) -> bool
     """
     with transaction.atomic():
         review = _lock_booked_review(reviewer, area_review_id)
-        presence = review.presence_requests.filter(
-            state=PresenceRequestState.ACTIVE
-        ).first()
-        if presence is None:
-            return False
-        presence.state = PresenceRequestState.WITHDRAWN
-        presence.withdrawn_at = timezone.now()
-        presence.save(update_fields=["state", "withdrawn_at"])
-        day = review.booked_day.isoformat()
-        merge_request = review.merge_request
-        record(
-            actor,
-            "presence.withdrawn",
-            presence,
-            {"state": PresenceRequestState.ACTIVE},
-            {"state": PresenceRequestState.WITHDRAWN},
-        )
-        queue_notification(
-            [merge_request.author.gitlab_user_id],
-            f"{reviewer.name} no longer needs you at the review of "
-            f"!{merge_request.iid} on {day}.",
-        )
-        return True
+        return withdraw_active_presence(review, reviewer, actor)

@@ -152,6 +152,24 @@
       "approved_by": "developer",
       "note": "",
       "session_id": null
+    },
+    {
+      "kind": "spec",
+      "spec": "2026-11-03-review-outcomes-continuity",
+      "sha256": "d3f9ad7471089f69ff2465c44e7fed3454778ee1827f420ae3e119f7d66cd903",
+      "approved_at": "2026-11-03T13:38:49+00:00",
+      "approved_by": "developer",
+      "note": "",
+      "session_id": null
+    },
+    {
+      "kind": "spec",
+      "spec": "2026-11-03-review-outcomes-continuity",
+      "sha256": "0e166a3fdffa1c7aa2fbe917766b97d306f667d2eebf920b6c10e6c9de97061f",
+      "approved_at": "2026-11-03T14:17:26+00:00",
+      "approved_by": "developer",
+      "note": "",
+      "session_id": null
     }
   ]
 }

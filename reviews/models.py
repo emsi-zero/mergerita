@@ -32,6 +32,7 @@ class MergeRequestState(models.TextChoices):  # pylint: disable=too-many-ancesto
     IN_REVIEW = "in_review"
     WAITING_ON_AUTHOR = "waiting_on_author"
     NEEDS_TRIAGE = "needs_triage"
+    APPROVED = "approved"
 
 
 class MergeRequest(models.Model):
@@ -105,6 +106,7 @@ class AreaReviewState(models.TextChoices):  # pylint: disable=too-many-ancestors
 
     UNBOOKED = "unbooked"
     BOOKED = "booked"
+    APPROVED = "approved"
 
 
 class AreaReview(models.Model):
@@ -133,6 +135,49 @@ class AreaReview(models.Model):
     booked_day = models.DateField(null=True, blank=True)
     slot_minutes = models.PositiveIntegerField(default=0)
     reason = models.TextField(blank=True, default="")
+
+
+class ReviewSessionOutcome(models.TextChoices):  # pylint: disable=too-many-ancestors
+    PENDING = "pending"
+    DONE = "done"
+    MORE_TIME = "more_time"
+    HANDED_BACK = "handed_back"
+    SUPERSEDED = "superseded"
+
+
+class ReviewSession(models.Model):
+    """One booking of an area review. The area review caches its latest session (INV-1)."""
+
+    area_review = models.ForeignKey(
+        AreaReview,
+        on_delete=models.DO_NOTHING,
+        db_constraint=False,
+        related_name="sessions",
+    )
+    reviewer = models.ForeignKey(
+        Person, on_delete=models.DO_NOTHING, db_constraint=False, related_name="+"
+    )
+    day = models.DateField()
+    slot_minutes = models.PositiveIntegerField()
+    reason = models.TextField(blank=True, default="", db_default="")
+    is_continuation = models.BooleanField(default=False, db_default=False)
+    outcome = models.CharField(
+        max_length=16,
+        choices=ReviewSessionOutcome.choices,
+        default=ReviewSessionOutcome.PENDING,
+        db_default=ReviewSessionOutcome.PENDING,
+    )
+    outcome_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(default=timezone.now, db_default=Now())
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["area_review"],
+                condition=models.Q(outcome=ReviewSessionOutcome.PENDING),
+                name="session_one_pending",
+            )
+        ]
 
 
 class PresenceRequestState(models.TextChoices):  # pylint: disable=too-many-ancestors

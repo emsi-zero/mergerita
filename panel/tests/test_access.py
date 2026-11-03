@@ -23,6 +23,9 @@ POST_URLS = [
     "/panel/availability/leave/1/delete/",
     "/panel/reviews/1/presence/",
     "/panel/reviews/1/presence/cancel/",
+    "/panel/sessions/1/done/",
+    "/panel/sessions/1/more-time/",
+    "/panel/sessions/1/hand-back/",
 ]
 POST_DATA = {
     "days": ["1"],

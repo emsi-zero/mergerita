@@ -1,0 +1,45 @@
+<article class="review">
+  <div class="review-head">
+    <div class="review-title">
+      <span class="mono muted">!{{ review.merge_request.iid }}</span>
+      <span class="strong">{{ review.merge_request.title }}</span>
+      {% if review.session_continuation %}<span class="chip">Follow-up</span>{% endif %}
+      {% for area in review.areas.all %}<span class="mono chip">{{ area.name }}</span>{% endfor %}
+    </div>
+    {% if review.merge_request.web_url %}<a class="grow-end" href="{{ review.merge_request.web_url }}" target="_blank" rel="noopener noreferrer">Go to MR</a>{% endif %}
+  </div>
+  <div class="muted small review-meta">Author {{ review.merge_request.author.name }} · {{ review.merge_request.changed_lines }} lines{% if review.reason %} · {{ review.reason }}{% endif %}</div>
+  <div class="review-actions">
+    {% if review.active_presence %}
+    <span class="badge author">Author requested</span>
+    <form method="post" action="{% url 'panel:presence-cancel' review.pk %}">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-ghost-danger">Cancel request</button>
+    </form>
+    {% else %}
+    <form method="post" class="presence-form" action="{% url 'panel:presence-request' review.pk %}">
+      {% csrf_token %}
+      <input type="text" name="note" class="field" maxlength="{{ note_max_length }}" placeholder="Note for the author (optional)" aria-label="Note for the author">
+      <button type="submit" class="btn btn-primary">Request author</button>
+    </form>
+    {% endif %}
+  </div>
+  {% if review.session_outcome == "pending" %}
+  <div class="review-actions outcome-actions">
+    <form method="post" action="{% url 'panel:session-done' review.session_id %}">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-primary">Done</button>
+    </form>
+    <form method="post" action="{% url 'panel:session-more-time' review.session_id %}">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-ghost">Need more time</button>
+    </form>
+    <form method="post" action="{% url 'panel:session-hand-back' review.session_id %}">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-ghost-danger">Hand back</button>
+    </form>
+  </div>
+  {% elif review.outcome_label %}
+  <div class="review-actions"><span class="badge booking">{{ review.outcome_label }}</span></div>
+  {% endif %}
+</article>

@@ -1,10 +1,11 @@
+from collections.abc import Callable
 from datetime import date, datetime, timedelta
 
 from django import forms
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db.models import Prefetch, Q, QuerySet
+from django.db.models import F, OuterRef, Prefetch, Q, QuerySet, Subquery
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone
@@ -18,7 +19,7 @@ from panel.forms import (
     PresenceForm,
     WorkingDaysForm,
 )
-from reviews import availability, presence
+from reviews import availability, outcomes, presence
 from reviews.booking import person_budget
 from reviews.models import (
     AreaReview,
@@ -30,6 +31,8 @@ from reviews.models import (
     Person,
     PresenceRequest,
     PresenceRequestState,
+    ReviewSession,
+    ReviewSessionOutcome,
     default_working_days,
 )
 
@@ -190,11 +193,13 @@ class MyReviewsView(PanelAccessMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         today = timezone.localdate()
         last_day = today + timedelta(days=settings.RMO_BOOKING_HORIZON_DAYS - 1)
+        latest = ReviewSession.objects.filter(area_review=OuterRef("pk")).order_by(
+            "-pk"
+        )
         reviews = (
             AreaReview.objects.filter(
                 reviewer=self.person,
                 state=AreaReviewState.BOOKED,
-                booked_day__range=(today, last_day),
             )
             .select_related("merge_request__author")
             .prefetch_related(
@@ -205,11 +210,37 @@ class MyReviewsView(PanelAccessMixin, TemplateView):
                     to_attr="active_presence",
                 ),
             )
-            .order_by("booked_day", "pk")
+            .annotate(
+                session_id=Subquery(latest.values("pk")[:1]),
+                session_outcome=Subquery(latest.values("outcome")[:1]),
+                session_continuation=Subquery(latest.values("is_continuation")[:1]),
+            )
+            .filter(
+                Q(booked_day__range=(today, last_day))
+                | Q(
+                    booked_day__lt=today,
+                    session_outcome=ReviewSessionOutcome.PENDING,
+                )
+            )
+            .order_by(
+                "booked_day",
+                F("session_continuation").desc(nulls_last=True),
+                "merge_request__opened_at",
+                "pk",
+            )
         )
         reviews_by_day: dict[date, list[AreaReview]] = {}
+        overdue: list[AreaReview] = []
         for review in reviews:
-            reviews_by_day.setdefault(review.booked_day, []).append(review)
+            review.outcome_label = (
+                ReviewSessionOutcome(review.session_outcome).label
+                if review.session_outcome
+                else ""
+            )
+            if review.booked_day < today:
+                overdue.append(review)
+            else:
+                reviews_by_day.setdefault(review.booked_day, []).append(review)
         capacity = {
             row.day: row
             for row in CapacityDay.objects.filter(
@@ -217,6 +248,7 @@ class MyReviewsView(PanelAccessMixin, TemplateView):
             )
         }
         context["today"] = today
+        context["overdue"] = overdue
         context["horizon_days"] = settings.RMO_BOOKING_HORIZON_DAYS
         context["note_max_length"] = settings.RMO_PRESENCE_NOTE_MAX_LENGTH
         context["days"] = [
@@ -279,6 +311,43 @@ class CancelPresenceView(PanelAccessMixin, View):
         if withdrawn:
             messages.success(request, "The request was withdrawn.")
         return redirect("panel:reviews")
+
+
+class SessionOutcomeView(PanelAccessMixin, View):
+    """Report an outcome on the developer's pending session (RVO-2..5)."""
+
+    http_method_names = ["post"]
+    outcome: Callable[[Person, int, str], object]
+    message: str
+
+    def post(self, request: HttpRequest, pk: int) -> HttpResponse:
+        try:
+            self.outcome(self.person, pk, f"user:{request.user.username}")
+        except ReviewSession.DoesNotExist as error:
+            raise Http404 from error
+        messages.success(request, self.message)
+        return redirect("panel:reviews")
+
+
+class SessionDoneView(SessionOutcomeView):
+    """Mark the pending session done (RVO-2)."""
+
+    outcome = staticmethod(outcomes.mark_done)
+    message = "Marked as done."
+
+
+class SessionMoreTimeView(SessionOutcomeView):
+    """Close the pending session and book the next one with the same reviewer (RVO-3)."""
+
+    outcome = staticmethod(outcomes.need_more_time)
+    message = "More time requested."
+
+
+class SessionHandBackView(SessionOutcomeView):
+    """Close the pending session and book another owner (RVO-4)."""
+
+    outcome = staticmethod(outcomes.hand_back)
+    message = "Review handed back."
 
 
 class AvailabilityView(PanelAccessMixin, TemplateView):

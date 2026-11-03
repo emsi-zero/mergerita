@@ -27,6 +27,21 @@ urlpatterns = [
         views.CancelPresenceView.as_view(),
         name="presence-cancel",
     ),
+    path(
+        "sessions/<int:pk>/done/",
+        views.SessionDoneView.as_view(),
+        name="session-done",
+    ),
+    path(
+        "sessions/<int:pk>/more-time/",
+        views.SessionMoreTimeView.as_view(),
+        name="session-more-time",
+    ),
+    path(
+        "sessions/<int:pk>/hand-back/",
+        views.SessionHandBackView.as_view(),
+        name="session-hand-back",
+    ),
     path("availability/", views.AvailabilityView.as_view(), name="availability"),
     path(
         "availability/days/", views.WorkingDaysView.as_view(), name="availability-days"
