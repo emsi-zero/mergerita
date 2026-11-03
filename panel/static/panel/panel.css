@@ -102,5 +102,44 @@ h2 { margin: 0; font-size: 16px; font-weight: 700; }
 .dates label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--text-2); }
 .dates input { padding: 9px 10px; border: 1px solid var(--border-strong); border-radius: 7px; font: inherit; }
 .errorlist { margin: 8px 0 0; padding: 0; list-style: none; color: var(--bad-fg); font-size: 13px; }
-.grow-end { margin-left: auto; color: var(--link); font-weight: 500; }
-.note-input { padding: 9px 10px; border: 1px solid var(--border-strong); border-radius: 7px; font: inherit; min-width: 260px; }
+/* My reviews: buttons and fields share one height, so a row of controls lines up. */
+.btn, .field, .review .grow-end { box-sizing: border-box; height: 38px; border-radius: 8px; font: inherit; font-weight: 500; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 16px; border: 1px solid transparent; cursor: pointer; white-space: nowrap; transition: background-color .15s, border-color .15s, color .15s; }
+.btn:focus-visible, .field:focus-visible, .review .grow-end:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+.btn-primary { background: var(--primary); border-color: var(--primary-border); color: var(--on-primary); }
+.btn-primary:hover { background: #D9A80B; }
+.btn-ghost-danger { background: var(--surface); border-color: var(--border-strong); color: var(--bad-fg); }
+.btn-ghost-danger:hover { background: var(--bad-bg); border-color: var(--bad-fg); }
+.field { padding: 0 12px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); font-weight: 400; }
+.field::placeholder { color: var(--muted); }
+.field:hover { border-color: var(--muted); }
+.field:focus { border-color: var(--primary-border); outline: none; box-shadow: 0 0 0 3px rgba(240, 185, 11, .25); }
+
+.days { gap: 16px; }
+.day-card { padding: 18px 20px; }
+.day-head { margin-bottom: 14px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+.budget { display: flex; align-items: center; gap: 10px; }
+.reviews { display: flex; flex-direction: column; gap: 12px; }
+.reviews .review { margin: 0; padding: 14px 16px; gap: 0; border-radius: 10px; transition: border-color .15s; }
+.reviews .review:hover { border-color: var(--border-strong); }
+.review-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.review-title { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; padding-top: 8px; }
+.review-meta { margin-top: 6px; line-height: 1.5; }
+.review-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border); }
+.review-actions form { margin: 0; }
+.presence-form { display: flex; flex-wrap: wrap; gap: 8px; flex: 1; }
+.presence-form .field { flex: 1 1 260px; min-width: 0; }
+/* "Go to MR" keeps its plain markup (a tested contract) and is drawn as a secondary button. */
+.review .grow-end { display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; margin-left: auto; padding: 0 14px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); text-decoration: none; }
+.review .grow-end::after { content: "\2197"; font-size: 13px; color: var(--muted); }
+.review .grow-end:hover { border-color: var(--primary-border); background: var(--warn-bg); color: var(--text); }
+.empty { padding: 18px 20px; }
+
+@media (max-width: 640px) {
+  .day-card { padding: 14px; }
+  .budget { width: 100%; }
+  .bar { flex: 1; width: auto; }
+  .review-head { flex-direction: column; }
+  .review .grow-end { margin-left: 0; }
+  .presence-form .btn { flex: 1 1 100%; }
+}

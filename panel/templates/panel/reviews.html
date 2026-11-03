@@ -7,45 +7,49 @@
 {% if presence_form.errors %}
 <div class="warning" role="alert">{{ presence_form.note.errors }}</div>
 {% endif %}
-<div class="stack">
+<div class="stack days">
   {% for d in days %}
-  <section class="card">
+  <section class="card day-card">
     <div class="row day-head">
       <h2 class="grow">{% if d.day == today %}Today · {% endif %}{{ d.day|date:"D j M" }}</h2>
-      <progress class="bar{% if d.over %} over{% endif %}" value="{{ d.booked }}" max="{{ d.budget }}"></progress>
-      <span class="small">{{ d.booked }} of {{ d.budget }} min booked</span>
+      <div class="budget">
+        <progress class="bar{% if d.over %} over{% endif %}" value="{{ d.booked }}" max="{{ d.budget }}"></progress>
+        <span class="small">{{ d.booked }} of {{ d.budget }} min booked</span>
+      </div>
     </div>
-    <div class="stack tight">
+    <div class="reviews">
       {% for review in d.reviews %}
-      <div class="review">
-        <div class="row">
-          <span class="mono muted">!{{ review.merge_request.iid }}</span>
-          <span class="strong">{{ review.merge_request.title }}</span>
-          {% for area in review.areas.all %}<span class="mono chip">{{ area.name }}</span>{% endfor %}
+      <article class="review">
+        <div class="review-head">
+          <div class="review-title">
+            <span class="mono muted">!{{ review.merge_request.iid }}</span>
+            <span class="strong">{{ review.merge_request.title }}</span>
+            {% for area in review.areas.all %}<span class="mono chip">{{ area.name }}</span>{% endfor %}
+          </div>
           {% if review.merge_request.web_url %}<a class="grow-end" href="{{ review.merge_request.web_url }}" target="_blank" rel="noopener noreferrer">Go to MR</a>{% endif %}
         </div>
-        <div class="muted small">Author {{ review.merge_request.author.name }} · {{ review.merge_request.changed_lines }} lines{% if review.reason %} · {{ review.reason }}{% endif %}</div>
-        <div class="row">
+        <div class="muted small review-meta">Author {{ review.merge_request.author.name }} · {{ review.merge_request.changed_lines }} lines{% if review.reason %} · {{ review.reason }}{% endif %}</div>
+        <div class="review-actions">
           {% if review.active_presence %}
           <span class="badge author">Author requested</span>
           <form method="post" action="{% url 'panel:presence-cancel' review.pk %}">
             {% csrf_token %}
-            <button type="submit" class="remove">Cancel request</button>
+            <button type="submit" class="btn btn-ghost-danger">Cancel request</button>
           </form>
           {% else %}
-          <form method="post" class="row" action="{% url 'panel:presence-request' review.pk %}">
+          <form method="post" class="presence-form" action="{% url 'panel:presence-request' review.pk %}">
             {% csrf_token %}
-            <input type="text" name="note" class="note-input" maxlength="{{ note_max_length }}" placeholder="Note for the author (optional)" aria-label="Note for the author">
-            <button type="submit" class="primary">Request author</button>
+            <input type="text" name="note" class="field" maxlength="{{ note_max_length }}" placeholder="Note for the author (optional)" aria-label="Note for the author">
+            <button type="submit" class="btn btn-primary">Request author</button>
           </form>
           {% endif %}
         </div>
-      </div>
+      </article>
       {% endfor %}
     </div>
   </section>
   {% empty %}
-  <div class="muted">No reviews booked. Free time stays available for new bookings.</div>
+  <div class="card empty muted">No reviews booked. Free time stays available for new bookings.</div>
   {% endfor %}
 </div>
 {% endblock %}
