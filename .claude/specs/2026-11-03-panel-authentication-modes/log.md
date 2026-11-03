@@ -18,3 +18,6 @@ deep-reviewer (logic, security): REQUEST_CHANGES — [High, confirmed, reproduce
 Delta re-review: High and Medium closed (probe re-run, both directions); INV-1..3 hold; APPROVE. Its Low (dot-segment `next` subtests missing) fixed by the main session.
 Deferred: every reply now carries `Vary: Cookie` because the middleware reads the marker on each request (no cache in front; accepted). `next` query strings are dropped (no panel view reads GET).
 Session 1: done.
+
+## 2026-11-03 11:26 UTC — spec closed
+Session archived: /home/tabdeal/side-projects/merge-orchestrator/.claude/craft/archive/session-20261103T112654+0000.json
