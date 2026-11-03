@@ -184,6 +184,7 @@ class GitLabRestGateway:
                     author_id=item["author"]["id"],
                     title=item["title"],
                     sha=item["sha"],
+                    web_url=item.get("web_url"),
                 )
                 for item in response.json()
             ],

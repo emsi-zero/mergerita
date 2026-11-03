@@ -31,6 +31,21 @@
   <div class="muted small">No area reviews yet. They are created when the AI Reviewer approves.</div>
   {% endfor %}
 
+  <h3>Presence requests</h3>
+  {% for review, ask in presence_requests %}
+  <div class="review">
+    <div class="row">
+      <span class="strong">{{ ask.requested_by.name }}</span>
+      {% for area in review.areas.all %}<span class="mono chip">{{ area.name }}</span>{% endfor %}
+      <span class="grow"></span>
+      <span class="day ok">{{ review.booked_day|date:"D j M" }}</span>
+    </div>
+    {% if ask.note %}<div class="muted small">{{ ask.note }}</div>{% endif %}
+  </div>
+  {% empty %}
+  <div class="muted small">No one asked you to join a review.</div>
+  {% endfor %}
+
   <h3>History</h3>
   <ol class="history">
     {% for at, text in history %}

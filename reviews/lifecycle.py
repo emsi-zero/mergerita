@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from urllib.parse import urlsplit
 
 from django.conf import settings
 from django.db.models import Q
@@ -81,6 +82,28 @@ def handle_event(event: InboxEvent) -> None:
             _queue_ai_review_check(
                 project_id, attributes["iid"], _is_ai_reviewer(payload)
             )
+        if action != "reconcile":
+            _record_web_url(project_id, attributes["iid"], attributes.get("url"))
+
+
+def _record_web_url(project_id: int, iid: int, value: object) -> None:
+    """Store the MR's web address when it is an absolute http(s) URL (INV-4).
+
+    Never raise: text that is too long, cannot be parsed, is not text, or is not
+    an absolute http(s) URL is dropped, and the stored address stays.
+    """
+    if not isinstance(value, str):
+        return
+    if len(value) > MergeRequest._meta.get_field("web_url").max_length:
+        return
+    try:
+        parts = urlsplit(value)
+    except ValueError:
+        return
+    if parts.scheme in ("http", "https") and parts.netloc:
+        MergeRequest.objects.filter(project_id=project_id, iid=iid).update(
+            web_url=value
+        )
 
 
 def _hook_sha(payload: dict) -> str | None:
@@ -119,7 +142,9 @@ def _reconcile_merge_request(
     head_sha = attributes.get("sha")
     entered_at = _event_time(event, "version_created_at", "updated_at")
     created = _open_merge_request(project_id, attributes, entered_at, head_sha)
+    web_url = attributes.get("web_url")
     if created is not None:
+        _record_web_url(project_id, attributes["iid"], web_url)
         outbox.enqueue("check_ai_review", {"merge_request_id": created.pk})
         return
     merge_request = MergeRequest.objects.select_for_update().get(
@@ -130,6 +155,9 @@ def _reconcile_merge_request(
     is_newer = "version_created_at" in attributes and (
         merge_request.head_sha_at is None or entered_at > merge_request.head_sha_at
     )
+    if not (head_sha and head_sha != previous_sha and not is_newer):
+        # A stale snapshot must not overwrite a newer address either.
+        _record_web_url(project_id, attributes["iid"], web_url)
     if head_sha and head_sha != previous_sha and is_newer:
         merge_request.head_sha = head_sha
         merge_request.head_sha_at = entered_at

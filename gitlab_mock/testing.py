@@ -24,7 +24,7 @@ def running_mock(
         sock.bind(("127.0.0.1", 0))
         port = sock.getsockname()[1]
     config = uvicorn.Config(
-        create_app(token, webhook_url, webhook_secret),
+        create_app(token, webhook_url, webhook_secret, f"http://127.0.0.1:{port}"),
         host="127.0.0.1",
         port=port,
         log_level="warning",

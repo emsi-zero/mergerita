@@ -25,6 +25,7 @@ class MergeRequestSummary:
     author_id: int
     title: str
     sha: str | None
+    web_url: str | None = None
 
 
 @dataclass(frozen=True)

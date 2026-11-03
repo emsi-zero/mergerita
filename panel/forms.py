@@ -1,4 +1,4 @@
-"""Forms for the Availability page."""
+"""Forms for the Availability and My reviews pages."""
 
 from django import forms
 from django.conf import settings
@@ -59,3 +59,12 @@ class LeaveForm(forms.Form):
                 "The end date must not be before the start date."
             )
         return cleaned
+
+
+class PresenceForm(forms.Form):
+    """The optional note of a presence request, limited in length (MRV-7)."""
+
+    note = forms.CharField(
+        required=False,
+        max_length=settings.RMO_PRESENCE_NOTE_MAX_LENGTH,
+    )

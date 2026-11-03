@@ -2,6 +2,7 @@
 """Run and drive the mock GitLab. Run it as: .venv/bin/python scripts/gitlab-mock ...
 
   scripts/gitlab-mock serve --port 8080 --token T --webhook-url URL --webhook-secret S
+                           [--public-url URL]
   scripts/gitlab-mock open PROJECT_ID AUTHOR_ID [--title T] [--file PATH ...]
                            [--reviewer USER_ID ...]
                            [--rename OLD:NEW ...] [--too-large PATH ...]
@@ -64,6 +65,9 @@ def _build_parser() -> argparse.ArgumentParser:
     serve.add_argument("--token", default="mock-token")
     serve.add_argument("--webhook-url")
     serve.add_argument("--webhook-secret", default="")
+    serve.add_argument(
+        "--public-url", help="address in MR links (default: http://HOST:PORT)"
+    )
 
     open_ = sub.add_parser("open")
     open_.add_argument("project_id", type=int)
@@ -139,7 +143,12 @@ def _request(args: argparse.Namespace) -> tuple[str, dict[str, Any]]:
 def main() -> int:
     args = _build_parser().parse_args()
     if args.command == "serve":
-        app = create_app(args.token, args.webhook_url, args.webhook_secret)
+        app = create_app(
+            args.token,
+            args.webhook_url,
+            args.webhook_secret,
+            args.public_url or f"http://{args.host}:{args.port}",
+        )
         uvicorn.run(app, host=args.host, port=args.port)
         return 0
     base = args.url.rstrip("/")

@@ -54,6 +54,8 @@ class MergeRequest(models.Model):
     head_sha = models.CharField(max_length=64, null=True, blank=True)
     # When that sha was pushed (GitLab's clock). An older reconcile snapshot is ignored.
     head_sha_at = models.DateTimeField(null=True, blank=True)
+    # GitLab's address of the MR. Null until a hook or reconciliation carries it.
+    web_url = models.URLField(max_length=500, null=True, blank=True)
 
     class Meta:
         constraints = [
@@ -131,6 +133,43 @@ class AreaReview(models.Model):
     booked_day = models.DateField(null=True, blank=True)
     slot_minutes = models.PositiveIntegerField(default=0)
     reason = models.TextField(blank=True, default="")
+
+
+class PresenceRequestState(models.TextChoices):  # pylint: disable=too-many-ancestors
+    ACTIVE = "active"
+    WITHDRAWN = "withdrawn"
+
+
+class PresenceRequest(models.Model):
+    """A reviewer's request that the MR author joins the review session."""
+
+    area_review = models.ForeignKey(
+        AreaReview,
+        on_delete=models.DO_NOTHING,
+        db_constraint=False,
+        related_name="presence_requests",
+    )
+    requested_by = models.ForeignKey(
+        Person, on_delete=models.DO_NOTHING, db_constraint=False, related_name="+"
+    )
+    note = models.TextField(blank=True, default="", db_default="")
+    state = models.CharField(
+        max_length=16,
+        choices=PresenceRequestState.choices,
+        default=PresenceRequestState.ACTIVE,
+        db_default=PresenceRequestState.ACTIVE,
+    )
+    created_at = models.DateTimeField(default=timezone.now, db_default=Now())
+    withdrawn_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["area_review"],
+                condition=models.Q(state=PresenceRequestState.ACTIVE),
+                name="presence_one_active",
+            )
+        ]
 
 
 class Leave(models.Model):

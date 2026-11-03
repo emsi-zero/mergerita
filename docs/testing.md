@@ -243,6 +243,15 @@ This raises `AuditImmutableError`.
    - *Availability*: save working days (at least one), a budget (60, 120, 180 or 240), and add or remove leave. After each save, open *Audit events* in the admin. There is one event with your user, the action, and the before and after values.
 4. Change the id in `/panel/mrs/<id>/` to an MR of another author. It must return 404.
 
+### M. Go to MR and author presence (MRV)
+
+1. Start the mock with `--public-url` set to the address the mock has for you (default `http://127.0.0.1:8080`). Open an MR as in scenario B and let the worker run. In the admin, the *Merge request* has a `web_url` such as `http://127.0.0.1:8080/group/project-7/-/merge_requests/1`.
+2. Sign in to the panel as the booked reviewer. On *My reviews* the booking shows a "Go to MR" link. It opens the address in a new tab. A booking whose MR has no `web_url` shows no link.
+3. Type a note and press "Request author". The badge "Author requested" and a "Cancel request" button replace the request button. Press "Request author" again in a second tab: nothing new is stored. *Outbox calls* has one `notify` call for the author, and *Audit events* has `presence.requested`.
+4. Sign in as the author. Open the MR in *My MRs*. "Presence requests" lists the reviewer, area, day and note.
+5. Press "Cancel request". The author gets a second `notify` call, and the request disappears from the MR page.
+6. Post to `/panel/reviews/<id>/presence/` for a booking of another reviewer, or with a note over 500 characters. The first returns 404, the second 400, and nothing is stored.
+
 ---
 
 ## 5. Reset
@@ -284,5 +293,7 @@ Checks. Mark each one on the real instance; a "no" is a finding to report.
 11. **`updated_at` moves.** A bot approval, a bot comment and a push each move the MR's `updated_at`. If an approval does not, reconciliation never reads it.
 12. **List filters.** `updated_after` is inclusive (the MR at that exact time is listed again; the orchestrator relies on its dedup), and `order_by=updated_at&sort=asc` is honoured.
 13. **Note Hook.** A bot comment on an MR sends a Note Hook to the orchestrator (the webhook must include *Comments*).
+14. **MR web address.** A Merge Request Hook carries `object_attributes.url`, and the MR list carries `web_url`. Both are absolute `https` URLs of the MR page. If the hook field has another name, no link shows on *My reviews* until the next reconciliation.
+15. **Chat text is plain.** The real chat adapter must send notification text as plain text, with no markdown, HTML or mention parsing. Presence request notes are typed by developers and go into the text as they are.
 
 With a write token and a throw-away MR, `run_worker --once` can need a second run, because it skips events younger than `RMO_INBOX_CLAIM_GRACE_SECONDS` (2 s). Run it again after a few seconds.

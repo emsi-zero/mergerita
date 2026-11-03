@@ -21,6 +21,7 @@ REVIEWER_STATES = (
     "unapproved",
 )
 DEFAULT_TIMEOUT_FAULT_SECONDS = 30.0
+DEFAULT_PUBLIC_URL = "http://127.0.0.1:8080"
 # System notes that GitLab writes when a reviewer approves or requests changes.
 VERDICT_NOTES = {
     "approved": "approved this merge request",
@@ -44,9 +45,14 @@ class MockState:  # pylint: disable=too-many-instance-attributes
     """Users, merge requests, faults and the webhook delivery log."""
 
     def __init__(
-        self, token: str, webhook_url: str | None, webhook_secret: str
+        self,
+        token: str,
+        webhook_url: str | None,
+        webhook_secret: str,
+        public_url: str,
     ) -> None:
         self.token = token
+        self.public_url = public_url
         self.webhook_url = webhook_url
         self.webhook_secret = webhook_secret
         self.webhooks_enabled = webhook_url is not None
@@ -120,7 +126,15 @@ class MockState:  # pylint: disable=too-many-instance-attributes
         """Set updated_at to now."""
         mr["updated_at"] = _now()
 
-    def mr_json(self, mr: dict[str, Any]) -> dict[str, Any]:
+    @staticmethod
+    def web_url(base_url: str, mr: dict[str, Any]) -> str:
+        """Return the address of the MR page, as GitLab builds it."""
+        return (
+            f"{base_url.rstrip('/')}/group/project-{mr['project_id']}"
+            f"/-/merge_requests/{mr['iid']}"
+        )
+
+    def mr_json(self, mr: dict[str, Any], base_url: str) -> dict[str, Any]:
         """Return the MR as GitLab's merge request JSON."""
         return {
             "id": mr["id"],
@@ -133,6 +147,7 @@ class MockState:  # pylint: disable=too-many-instance-attributes
             "created_at": mr["created_at"],
             "updated_at": mr["updated_at"],
             "sha": mr["sha"],
+            "web_url": self.web_url(base_url, mr),
             "labels": [],
         }
 
@@ -154,7 +169,7 @@ class MockState:  # pylint: disable=too-many-instance-attributes
                 "users": list(self.users.values()),
                 "merge_requests": [
                     {
-                        **self.mr_json(mr),
+                        **self.mr_json(mr, self.public_url),
                         "reviewer_states": self.reviewers_json(mr),
                         "diffs": mr["diffs"],
                     }
@@ -203,6 +218,7 @@ class MockState:  # pylint: disable=too-many-instance-attributes
             "state": mr["state"],
             "created_at": mr["created_at"],
             "updated_at": mr["updated_at"],
+            "url": self.web_url(self.public_url, mr),
             "last_commit": {"id": mr["sha"]},
             **extra,
         }
@@ -274,8 +290,8 @@ def _api_router(state: MockState) -> APIRouter:
     router = APIRouter(prefix="/api/v4", dependencies=[Depends(api_guard)])
 
     @router.get("/projects/{project_id}/merge_requests/{iid}")
-    def get_mr(project_id: int, iid: int) -> dict[str, Any]:
-        return state.mr_json(state.mr(project_id, iid))
+    def get_mr(project_id: int, iid: int, request: Request) -> dict[str, Any]:
+        return state.mr_json(state.mr(project_id, iid), str(request.base_url))
 
     @router.get("/projects/{project_id}/merge_requests/{iid}/diffs")
     def get_diffs(
@@ -309,7 +325,7 @@ def _api_router(state: MockState) -> APIRouter:
 
     @router.put("/projects/{project_id}/merge_requests/{iid}")
     def update_mr(
-        project_id: int, iid: int, body: dict[str, Any] = Body(...)
+        project_id: int, iid: int, request: Request, body: dict[str, Any] = Body(...)
     ) -> dict[str, Any]:
         mr = state.mr(project_id, iid)
         with state.lock:
@@ -320,7 +336,7 @@ def _api_router(state: MockState) -> APIRouter:
                     for user_id in body["reviewer_ids"]
                 ]
             state.touch(mr)
-            return state.mr_json(mr)
+            return state.mr_json(mr, str(request.base_url))
 
     @router.get("/projects/{project_id}/merge_requests")
     def list_mrs(
@@ -339,7 +355,8 @@ def _api_router(state: MockState) -> APIRouter:
                 threshold = _parse_time(updated_after)
                 mrs = [m for m in mrs if _parse_time(m["updated_at"]) >= threshold]
             mrs.sort(key=lambda m: m[order_by], reverse=sort == "desc")
-            return _paged([state.mr_json(m) for m in mrs], request, response)
+            base_url = str(request.base_url)
+            return _paged([state.mr_json(m, base_url) for m in mrs], request, response)
 
     return router
 
@@ -379,7 +396,7 @@ def _control_router(state: MockState) -> APIRouter:
             state.add_version(mr)
             state.mrs[(project_id, iid)] = mr
             payload = state.mr_hook(mr, "open", author)
-            result = state.mr_json(mr)
+            result = state.mr_json(mr, state.public_url)
         state.send_webhook("Merge Request Hook", payload)
         return result
 
@@ -454,7 +471,7 @@ def _activity_router(state: MockState) -> APIRouter:
                 mr["diffs"] = body["diffs"]
             state.touch(mr)
             payload = state.mr_hook(mr, "update", mr["author"], oldrev=oldrev)
-            result = state.mr_json(mr)
+            result = state.mr_json(mr, state.public_url)
         state.send_webhook("Merge Request Hook", payload)
         return result
 
@@ -509,10 +526,16 @@ def _paged(items: list, request: Request, response: Response) -> list:
 
 
 def create_app(
-    token: str, webhook_url: str | None = None, webhook_secret: str = ""
+    token: str,
+    webhook_url: str | None = None,
+    webhook_secret: str = "",
+    public_url: str = DEFAULT_PUBLIC_URL,
 ) -> FastAPI:
-    """Build a mock GitLab app with empty state."""
-    state = MockState(token, webhook_url, webhook_secret)
+    """Build a mock GitLab app with empty state.
+
+    `public_url` is the address in the MR links of webhooks and control replies.
+    """
+    state = MockState(token, webhook_url, webhook_secret, public_url)
     app = FastAPI(title="gitlab_mock")
     app.state.mock = state
     app.include_router(_api_router(state))

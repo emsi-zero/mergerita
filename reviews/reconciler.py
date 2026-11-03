@@ -111,6 +111,7 @@ def _payloads(
             "title": summary.title,
             "sha": summary.sha,
             "updated_at": summary.updated_at,
+            "web_url": summary.web_url,
         }
         changed = (
             summary.iid not in known_shas or known_shas[summary.iid] != summary.sha

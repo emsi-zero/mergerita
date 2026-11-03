@@ -102,3 +102,5 @@ h2 { margin: 0; font-size: 16px; font-weight: 700; }
 .dates label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--text-2); }
 .dates input { padding: 9px 10px; border: 1px solid var(--border-strong); border-radius: 7px; font: inherit; }
 .errorlist { margin: 8px 0 0; padding: 0; list-style: none; color: var(--bad-fg); font-size: 13px; }
+.grow-end { margin-left: auto; color: var(--link); font-weight: 500; }
+.note-input { padding: 9px 10px; border: 1px solid var(--border-strong); border-radius: 7px; font: inherit; min-width: 260px; }

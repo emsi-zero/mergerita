@@ -134,6 +134,24 @@
       "approved_by": "developer",
       "note": "",
       "session_id": null
+    },
+    {
+      "kind": "spec",
+      "spec": "2026-11-03-my-reviews-go-mr-author-presence",
+      "sha256": "3d5f80d68adaa8689c900a353d82b73327ed003748d75989eec29abd0eff4506",
+      "approved_at": "2026-11-03T11:51:47+00:00",
+      "approved_by": "developer",
+      "note": "",
+      "session_id": null
+    },
+    {
+      "kind": "spec",
+      "spec": "2026-11-03-my-reviews-go-mr-author-presence",
+      "sha256": "91708fc7fd40f87a23062919dcc1723f98025cb6bf64e629d2a5a0f5b1a2939f",
+      "approved_at": "2026-11-03T12:15:43+00:00",
+      "approved_by": "developer",
+      "note": "",
+      "session_id": null
     }
   ]
 }

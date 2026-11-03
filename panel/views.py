@@ -11,8 +11,14 @@ from django.utils import timezone
 from django.views.generic import DetailView, ListView, RedirectView, TemplateView, View
 
 from audit.models import AuditEvent
-from panel.forms import WEEKDAY_NAMES, BudgetForm, LeaveForm, WorkingDaysForm
-from reviews import availability
+from panel.forms import (
+    WEEKDAY_NAMES,
+    BudgetForm,
+    LeaveForm,
+    PresenceForm,
+    WorkingDaysForm,
+)
+from reviews import availability, presence
 from reviews.booking import person_budget
 from reviews.models import (
     AreaReview,
@@ -22,6 +28,8 @@ from reviews.models import (
     MergeRequest,
     MergeRequestState,
     Person,
+    PresenceRequest,
+    PresenceRequestState,
     default_working_days,
 )
 
@@ -144,7 +152,12 @@ class MergeRequestDetailPanelView(PanelAccessMixin, DetailView):
                 queryset=AreaReview.objects.select_related("reviewer")
                 .prefetch_related("areas")
                 .order_by("pk"),
-            )
+            ),
+            Prefetch(
+                "area_reviews__presence_requests",
+                queryset=_active_presence().select_related("requested_by"),
+                to_attr="active_presence",
+            ),
         )
 
     def get_context_data(self, **kwargs: object) -> dict:
@@ -155,6 +168,13 @@ class MergeRequestDetailPanelView(PanelAccessMixin, DetailView):
             merge_request.state
         ]
         context["area_reviews"] = area_reviews
+        today = timezone.localdate()
+        context["presence_requests"] = [
+            (review, ask)
+            for review in area_reviews
+            if review.booked_day and review.booked_day >= today
+            for ask in review.active_presence
+        ]
         context["next_title"], context["next_text"] = NEXT_STEPS[merge_request.state]
         context["size_warning"] = _size_warning(merge_request, area_reviews)
         context["history"] = _history(merge_request, area_reviews)
@@ -177,7 +197,14 @@ class MyReviewsView(PanelAccessMixin, TemplateView):
                 booked_day__range=(today, last_day),
             )
             .select_related("merge_request__author")
-            .prefetch_related("areas")
+            .prefetch_related(
+                "areas",
+                Prefetch(
+                    "presence_requests",
+                    queryset=_active_presence(),
+                    to_attr="active_presence",
+                ),
+            )
             .order_by("booked_day", "pk")
         )
         reviews_by_day: dict[date, list[AreaReview]] = {}
@@ -191,6 +218,7 @@ class MyReviewsView(PanelAccessMixin, TemplateView):
         }
         context["today"] = today
         context["horizon_days"] = settings.RMO_BOOKING_HORIZON_DAYS
+        context["note_max_length"] = settings.RMO_PRESENCE_NOTE_MAX_LENGTH
         context["days"] = [
             self._day(day, day_reviews, capacity.get(day))
             for day, day_reviews in reviews_by_day.items()
@@ -210,6 +238,47 @@ class MyReviewsView(PanelAccessMixin, TemplateView):
             "budget": budget,
             "over": booked > budget,
         }
+
+
+class RequestPresenceView(MyReviewsView):  # pylint: disable=too-many-ancestors
+    """Ask the author to join one of the developer's booked reviews (MRV-4)."""
+
+    http_method_names = ["post"]
+
+    def post(self, request: HttpRequest, pk: int) -> HttpResponse:
+        form = PresenceForm(request.POST)
+        if not form.is_valid():
+            context = self.get_context_data(presence_form=form, presence_review_id=pk)
+            return self.render_to_response(context, status=400)
+        try:
+            requested = presence.request_presence(
+                self.person,
+                pk,
+                form.cleaned_data["note"],
+                f"user:{request.user.username}",
+            )
+        except AreaReview.DoesNotExist as error:
+            raise Http404 from error
+        if requested:
+            messages.success(request, "The author was asked to join.")
+        return redirect("panel:reviews")
+
+
+class CancelPresenceView(PanelAccessMixin, View):
+    """Withdraw the request for the author on one of the developer's reviews (MRV-6)."""
+
+    http_method_names = ["post"]
+
+    def post(self, request: HttpRequest, pk: int) -> HttpResponse:
+        try:
+            withdrawn = presence.withdraw_presence(
+                self.person, pk, f"user:{request.user.username}"
+            )
+        except AreaReview.DoesNotExist as error:
+            raise Http404 from error
+        if withdrawn:
+            messages.success(request, "The request was withdrawn.")
+        return redirect("panel:reviews")
 
 
 class AvailabilityView(PanelAccessMixin, TemplateView):
@@ -309,6 +378,11 @@ class DeleteLeaveView(PanelAccessMixin, View):
             raise Http404 from error
         messages.success(request, "Leave removed.")
         return redirect("panel:availability")
+
+
+def _active_presence() -> QuerySet[PresenceRequest]:
+    """Return the presence requests that are not withdrawn."""
+    return PresenceRequest.objects.filter(state=PresenceRequestState.ACTIVE)
 
 
 def _summary(merge_request: MergeRequest) -> str:

@@ -4,6 +4,9 @@
   <h1>My review bookings</h1>
   <div class="muted">Next {{ horizon_days }} days</div>
 </div>
+{% if presence_form.errors %}
+<div class="warning" role="alert">{{ presence_form.note.errors }}</div>
+{% endif %}
 <div class="stack">
   {% for d in days %}
   <section class="card">
@@ -19,8 +22,24 @@
           <span class="mono muted">!{{ review.merge_request.iid }}</span>
           <span class="strong">{{ review.merge_request.title }}</span>
           {% for area in review.areas.all %}<span class="mono chip">{{ area.name }}</span>{% endfor %}
+          {% if review.merge_request.web_url %}<a class="grow-end" href="{{ review.merge_request.web_url }}" target="_blank" rel="noopener noreferrer">Go to MR</a>{% endif %}
         </div>
         <div class="muted small">Author {{ review.merge_request.author.name }} · {{ review.merge_request.changed_lines }} lines{% if review.reason %} · {{ review.reason }}{% endif %}</div>
+        <div class="row">
+          {% if review.active_presence %}
+          <span class="badge author">Author requested</span>
+          <form method="post" action="{% url 'panel:presence-cancel' review.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="remove">Cancel request</button>
+          </form>
+          {% else %}
+          <form method="post" class="row" action="{% url 'panel:presence-request' review.pk %}">
+            {% csrf_token %}
+            <input type="text" name="note" class="note-input" maxlength="{{ note_max_length }}" placeholder="Note for the author (optional)" aria-label="Note for the author">
+            <button type="submit" class="primary">Request author</button>
+          </form>
+          {% endif %}
+        </div>
       </div>
       {% endfor %}
     </div>

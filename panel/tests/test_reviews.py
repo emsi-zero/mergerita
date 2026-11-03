@@ -75,3 +75,32 @@ class MyReviewsTests(TestCase):
         self.assertNotContains(response, "yesterday reason")
         self.assertNotContains(response, "beyond reason")
         self.assertNotContains(response, "someone else reason")
+
+    def test_mrv_3_go_to_mr_link_opens_in_new_tab_only_with_an_address(self):
+        """MRV-3: Given a booked review whose MR has a web address and one whose
+        MR has none, when I open My reviews, then the first shows a "Go to MR"
+        link to a new tab without opener access, and the second shows no link.
+        """
+        me = create_person(1, "Me", "me")
+        author = create_person(3, "Author Ann", "ann")
+        area = CodeArea.objects.create(name="payments", size_limit_lines=300)
+        today = timezone.localdate()
+        with_url = create_merge_request(
+            author, 1, "Has link", MergeRequestState.IN_REVIEW
+        )
+        with_url.web_url = "https://gitlab.example.com/g/p/-/merge_requests/1"
+        with_url.save()
+        no_url = create_merge_request(author, 2, "No link", MergeRequestState.IN_REVIEW)
+        book(me, with_url, area, today, "r1")
+        book(me, no_url, area, today, "r2")
+        panel_login(self.client, me.user)
+
+        response = self.client.get("/panel/reviews/")
+
+        self.assertContains(
+            response,
+            '<a class="grow-end" href="https://gitlab.example.com/g/p/-/merge_requests/1"'
+            ' target="_blank" rel="noopener noreferrer">Go to MR</a>',
+            count=1,
+            html=True,
+        )

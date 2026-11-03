@@ -17,6 +17,16 @@ urlpatterns = [
         name="mr-detail",
     ),
     path("reviews/", views.MyReviewsView.as_view(), name="reviews"),
+    path(
+        "reviews/<int:pk>/presence/",
+        views.RequestPresenceView.as_view(),
+        name="presence-request",
+    ),
+    path(
+        "reviews/<int:pk>/presence/cancel/",
+        views.CancelPresenceView.as_view(),
+        name="presence-cancel",
+    ),
     path("availability/", views.AvailabilityView.as_view(), name="availability"),
     path(
         "availability/days/", views.WorkingDaysView.as_view(), name="availability-days"
