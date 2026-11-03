@@ -3,6 +3,7 @@ from datetime import date
 from django.test import TestCase
 
 from audit.models import AuditEvent
+from panel.tests.helpers import panel_login
 from panel.tests.test_merge_requests import create_person
 from reviews.models import Leave
 
@@ -11,7 +12,7 @@ class AvailabilityTests(TestCase):
     def setUp(self) -> None:
         self.me = create_person(1, "Me", "me")
         self.other = create_person(2, "Other", "other")
-        self.client.force_login(self.me.user)
+        panel_login(self.client, self.me.user)
 
     def test_dvp_7_working_days_saved_and_empty_selection_rejected(self):
         """DVP-7: Given my working days,

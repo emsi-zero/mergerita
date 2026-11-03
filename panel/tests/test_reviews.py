@@ -3,6 +3,7 @@ from datetime import timedelta
 from django.test import TestCase
 from django.utils import timezone
 
+from panel.tests.helpers import panel_login
 from panel.tests.test_merge_requests import create_merge_request, create_person
 from reviews.models import (
     AreaReview,
@@ -59,7 +60,7 @@ class MyReviewsTests(TestCase):
         CapacityDay.objects.create(
             person=me, day=tomorrow, budget_minutes=60, booked_minutes=60
         )
-        self.client.force_login(me.user)
+        panel_login(self.client, me.user)
 
         response = self.client.get("/panel/reviews/")
 

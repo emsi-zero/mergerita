@@ -3,6 +3,7 @@ from datetime import date
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
+from panel.tests.helpers import panel_login
 from panel.tests.test_merge_requests import create_person
 from reviews.models import Leave
 
@@ -40,7 +41,7 @@ class PanelAccessTests(TestCase):
 
                 self.assertRedirects(
                     response,
-                    f"/accounts/login/?next={url}",
+                    f"/panel/login/?next={url}",
                     fetch_redirect_response=False,
                 )
         owner = create_person(1, "Owner", "owner")
@@ -53,7 +54,7 @@ class PanelAccessTests(TestCase):
 
                 self.assertRedirects(
                     response,
-                    f"/accounts/login/?next={url}",
+                    f"/panel/login/?next={url}",
                     fetch_redirect_response=False,
                 )
         with self.subTest(url="no data changed"):
@@ -71,7 +72,7 @@ class PanelAccessTests(TestCase):
         when a panel page opens, then it replies 403 with the not-linked page.
         """
         user = get_user_model().objects.create_user("ghost", password="pw")
-        self.client.force_login(user)
+        panel_login(self.client, user)
 
         for url in PANEL_URLS:
             with self.subTest(url=url):

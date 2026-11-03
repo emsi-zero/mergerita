@@ -78,6 +78,7 @@ main { max-width: 1240px; margin: 0 auto; padding: 24px; }
 .login label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--text-2); }
 .login input { padding: 9px 10px; border: 1px solid var(--border-strong); border-radius: 7px; font: inherit; }
 .primary { padding: 10px 14px; border-radius: 8px; border: none; background: var(--primary); color: var(--on-primary); font-weight: 500; cursor: pointer; }
+.login-sso { display: block; margin-top: 14px; text-align: center; text-decoration: none; }
 h2 { margin: 0; font-size: 16px; font-weight: 700; }
 .lead { margin: 6px 0 18px; max-width: 640px; line-height: 1.5; }
 .tight { gap: 8px; }

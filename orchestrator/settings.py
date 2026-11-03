@@ -1,6 +1,8 @@
 import os
 from pathlib import Path
 
+from django.core.exceptions import ImproperlyConfigured
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 DEBUG = os.environ.get("DEBUG", "0") == "1"
@@ -25,7 +27,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
-    "django.contrib.sessions.middleware.SessionMiddleware",
+    "panel.middleware.AreaSessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -64,7 +66,8 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 USE_TZ = True
 TIME_ZONE = "UTC"
 STATIC_URL = "static/"
-LOGIN_URL = "/accounts/login/"
+LOGIN_URL = "/panel/login/"
+PANEL_SESSION_COOKIE_NAME = "panel_sessionid"
 LOGIN_REDIRECT_URL = "/panel/"
 
 REST_FRAMEWORK = {
@@ -120,3 +123,23 @@ RMO_GITLAB_GATEWAY = os.environ.get(
     "RMO_GITLAB_GATEWAY", "integrations.fakes.FakeGitLabGateway"
 )
 RMO_NOTIFIER = "integrations.fakes.FakeNotifier"
+
+
+PANEL_AUTH_MODE_CHOICES = ("local", "sso")
+
+
+def parse_panel_auth_modes(raw: str) -> tuple[str, ...]:
+    """Return the enabled panel sign-in modes from a comma-separated string."""
+    modes = tuple(mode.strip() for mode in raw.split(","))
+    unknown = [mode for mode in modes if mode not in PANEL_AUTH_MODE_CHOICES]
+    if unknown:
+        raise ImproperlyConfigured(
+            f"PANEL_AUTH_MODES must list only {PANEL_AUTH_MODE_CHOICES}, "
+            f"not empty or unknown values: {unknown!r}"
+        )
+    return modes
+
+
+PANEL_AUTH_MODES = parse_panel_auth_modes(
+    os.environ.get("PANEL_AUTH_MODES", "local,sso")
+)

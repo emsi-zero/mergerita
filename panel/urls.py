@@ -1,10 +1,14 @@
 from django.urls import path
 
-from panel import views
+from panel import auth_views, views
 
 app_name = "panel"
 
 urlpatterns = [
+    path("login/", auth_views.PanelLoginView.as_view(), name="login"),
+    path("logout/", auth_views.PanelLogoutView.as_view(), name="logout"),
+    path("sso/start/", auth_views.SsoStartView.as_view(), name="sso-start"),
+    path("sso/callback/", auth_views.SsoCallbackView.as_view(), name="sso-callback"),
     path("", views.PanelHomeView.as_view(), name="home"),
     path("mrs/", views.MyMergeRequestsView.as_view(), name="mrs"),
     path(

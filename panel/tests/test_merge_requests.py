@@ -4,6 +4,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from audit.models import AuditEvent
+from panel.tests.helpers import panel_login
 from reviews.models import (
     AreaReview,
     AreaReviewState,
@@ -36,7 +37,7 @@ class MergeRequestPanelTests(TestCase):
     def setUp(self) -> None:
         self.me = create_person(1, "Me", "me")
         self.other = create_person(2, "Other", "other")
-        self.client.force_login(self.me.user)
+        panel_login(self.client, self.me.user)
 
     def test_dvp_3_list_shows_only_own_merge_requests(self):
         """DVP-3: Given MRs of two authors,

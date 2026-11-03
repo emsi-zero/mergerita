@@ -236,7 +236,7 @@ This raises `AuditImmutableError`.
 ### L. Developer panel (DVP)
 
 1. In the admin, create a Django user. Open a *Person* and set its *User* field to that user.
-2. Open `http://localhost:8000/accounts/login/` and sign in with that user. A user with no Person gets a 403 page.
+2. Open `http://localhost:8000/panel/login/` and sign in with that user. The admin stays signed out until you sign in there too. A user with no Person gets a 403 page.
 3. Check the three tabs:
    - *My MRs*: only MRs the Person authored. Open one to see area reviews, the next step, and the history.
    - *My reviews*: bookings from today to the booking horizon, grouped by day with booked minutes over budget.

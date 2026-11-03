@@ -1,0 +1,8 @@
+{% extends "panel/base.html" %}
+{% block content %}
+<section class="card notice">
+  <h1>GitLab sign-in is not set up yet</h1>
+  <p>Single sign-on through GitLab is not available yet.</p>
+  <p><a href="{% url 'panel:login' %}">Back to the sign-in page</a></p>
+</section>
+{% endblock %}

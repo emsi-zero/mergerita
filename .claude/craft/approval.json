@@ -125,6 +125,15 @@
       "approved_by": "developer",
       "note": "",
       "session_id": null
+    },
+    {
+      "kind": "spec",
+      "spec": "2026-11-03-panel-authentication-modes",
+      "sha256": "b99dcf910fd5730a8e972b8732ae212056b3da8bc369210f63589ad31ff5a42b",
+      "approved_at": "2026-11-03T10:36:20+00:00",
+      "approved_by": "developer",
+      "note": "",
+      "session_id": null
     }
   ]
 }

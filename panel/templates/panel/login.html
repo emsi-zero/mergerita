@@ -2,6 +2,7 @@
 {% block content %}
 <section class="card login">
   <h1>Sign in</h1>
+  {% if local_enabled %}
   <form method="post">
     {% csrf_token %}
     {{ form.non_field_errors }}
@@ -10,5 +11,9 @@
     <input type="hidden" name="next" value="{{ next }}">
     <button type="submit" class="primary">Sign in</button>
   </form>
+  {% endif %}
+  {% if sso_enabled %}
+  <a href="{% url 'panel:sso-start' %}" class="primary login-sso">Sign in with GitLab</a>
+  {% endif %}
 </section>
 {% endblock %}
