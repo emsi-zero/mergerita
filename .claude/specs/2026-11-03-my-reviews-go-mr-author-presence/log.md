@@ -24,3 +24,6 @@ tests `scripts/test.sh -q` PASS (65 passed, 175 subtests) · pylint 10.00 PASS �
 Delta re-review (deep-reviewer): High closed — the web_url check is total; every value that could raise is dropped, or rejected by Postgres jsonb at ingress (NUL, lone surrogate). MRV-1 holds on every non-stale reconcile path. Its new Low (concurrency test could not detect a removed lock) fixed by the main session: thread results asserted `[True, False]`, verified by mutation.
 Accepted: a same-sha stale reconcile snapshot can briefly overwrite a moved MR's URL (heals at the next reconciliation); request/cancel toggling can send repeated chats to the author (audited, limited to the reviewer's own bookings). The real chat adapter must send plain text (docs/testing.md smoke item 15).
 Session 1: done.
+
+## 2026-11-03 12:23 UTC — spec closed
+Session archived: /home/tabdeal/side-projects/merge-orchestrator/.claude/craft/archive/session-20261103T122309+0000.json
