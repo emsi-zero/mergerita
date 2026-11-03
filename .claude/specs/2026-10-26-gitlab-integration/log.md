@@ -99,3 +99,6 @@ Round 1: two Confirmed Highs (no reconcile check for `waiting_on_author`; non-Gi
 Delta round Medium (reproduced: >100 MRs in the lag window stalled every run) and two Lows (delayed push webhook moved head_sha back; version time of a newer push) fixed and verified by Gate A (Medium/Low: no re-review needed, workflow §3).
 Deferred: real gateway paging through `/versions` has no direct unit test (covered by GLI-13 e2e); a permanent pile of >100 MRs with one exact `updated_at` still raises loudly; reconciliation blocks the worker loop while it runs (documented).
 Session 4: done. Project: all sessions done. Remaining before production: the smoke test against the work GitLab (docs/testing.md §6).
+
+## 2026-11-03 08:43 UTC — spec closed
+Session archived: /home/tabdeal/side-projects/merge-orchestrator/.claude/craft/archive/session-20261103T084319+0000.json
