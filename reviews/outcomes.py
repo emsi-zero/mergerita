@@ -7,6 +7,7 @@ from audit.services import record
 from reviews import booking, presence
 from reviews.alerts import queue_notification
 from reviews.models import (
+    AreaReview,
     AreaReviewState,
     Person,
     ReviewSession,
@@ -70,9 +71,20 @@ def hand_back(reviewer: Person, session_id: int, actor: str) -> bool:
 
 
 def _lock_pending_session(reviewer: Person, session_id: int) -> ReviewSession:
-    """Lock and return the pending session of `reviewer` with its booked area review (INV-1)."""
+    """Lock and return the pending session of `reviewer` with its booked area review (INV-1).
+
+    Lock the area review first, then the session (INV-6).
+    """
+    area_review_id = (
+        ReviewSession.objects.filter(pk=session_id)
+        .values_list("area_review_id", flat=True)
+        .first()
+    )
+    if area_review_id is None:
+        raise ReviewSession.DoesNotExist(session_id)
+    AreaReview.objects.select_for_update(of=("self",)).filter(pk=area_review_id).first()
     return (
-        ReviewSession.objects.select_for_update(of=("self", "area_review"))
+        ReviewSession.objects.select_for_update(of=("self",))
         .select_related("area_review__merge_request__author")
         .get(
             pk=session_id,

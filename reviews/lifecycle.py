@@ -52,6 +52,9 @@ def handle_event(event: InboxEvent) -> None:
     payload = event.payload
     if event.event_kind == NOTE_EVENT:
         if payload["object_attributes"]["noteable_type"] == "MergeRequest":
+            _queue_coverage_check(
+                payload["project"]["id"], payload["merge_request"]["iid"]
+            )
             _queue_ai_review_check(
                 payload["project"]["id"],
                 payload["merge_request"]["iid"],
@@ -65,6 +68,7 @@ def handle_event(event: InboxEvent) -> None:
             # Only the reconciler may send this action; a webhook with it is ignored.
             if event.source == RECONCILE_SOURCE:
                 _reconcile_merge_request(event, project_id, attributes)
+                _queue_coverage_check(project_id, attributes["iid"])
         elif action == "open":
             _open_merge_request(
                 project_id,
@@ -83,6 +87,7 @@ def handle_event(event: InboxEvent) -> None:
                 project_id, attributes["iid"], _is_ai_reviewer(payload)
             )
         if action != "reconcile":
+            _queue_coverage_check(project_id, attributes["iid"])
             _record_web_url(project_id, attributes["iid"], attributes.get("url"))
 
 
@@ -191,6 +196,17 @@ def _queue_ai_review_check(project_id: int, iid: int, include_waiting: bool) -> 
         outbox.enqueue("check_ai_review", {"merge_request_id": merge_request.pk})
 
 
+def _queue_coverage_check(project_id: int, iid: int) -> None:
+    """Queue one coverage check for an MR in review or waiting on its author (RVO-6)."""
+    merge_request = MergeRequest.objects.filter(
+        project_id=project_id,
+        iid=iid,
+        state__in=[MergeRequestState.IN_REVIEW, MergeRequestState.WAITING_ON_AUTHOR],
+    ).first()
+    if merge_request is not None:
+        outbox.enqueue("check_coverage", {"merge_request_id": merge_request.pk})
+
+
 def _reopen_ai_gate(project_id: int, iid: int, entered_at: datetime) -> None:
     """Handle new commits: restart the AI gate clock and queue a check.
 
@@ -206,6 +222,8 @@ def _reopen_ai_gate(project_id: int, iid: int, entered_at: datetime) -> None:
     )
     if merge_request is None or merge_request.state not in AI_GATE_OPEN_STATES:
         return
+    # A push closes the human change requests: the AI gate and the follow-up take over.
+    merge_request.area_reviews.update(changes_requested_at=None)
     before = merge_request.state
     merge_request.ai_gate_entered_at = max(merge_request.ai_gate_entered_at, entered_at)
     merge_request.state = MergeRequestState.AWAITING_AI_REVIEW

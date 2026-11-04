@@ -1,6 +1,6 @@
 # Review & Merge Orchestrator — thin-slice prototype
 
-A prototype of the design in `docs/architecture-design.md`. It covers webhook ingress, the MR lifecycle with the AI-review gate, the area resolver, and explainable booking. All external systems (GitLab, chat, calendar) are in-memory fakes behind adapter interfaces.
+A prototype of the design in `docs/architecture-design.md`. It covers webhook ingress, the MR lifecycle with the AI-review gate, the area resolver, and explainable booking. An MR ends at `approved`, once GitLab shows a fresh approval from the booked reviewer of every area (no merge routing yet). All external systems (GitLab, chat, calendar) are in-memory fakes behind adapter interfaces.
 
 Spec, design and the review log: `.claude/specs/2026-10-26-orchestrator-thin-slice-prototype/`.
 

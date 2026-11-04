@@ -43,6 +43,7 @@ STATE_BADGES = {
     MergeRequestState.IN_REVIEW: ("In review", "review"),
     MergeRequestState.WAITING_ON_AUTHOR: ("Your move", "author"),
     MergeRequestState.NEEDS_TRIAGE: ("Needs triage", "triage"),
+    MergeRequestState.APPROVED: ("Approved", "review"),
 }
 
 STATE_SUMMARIES = {
@@ -51,6 +52,7 @@ STATE_SUMMARIES = {
     MergeRequestState.IN_REVIEW: "Reviewers are booked",
     MergeRequestState.WAITING_ON_AUTHOR: "AI Reviewer requested changes",
     MergeRequestState.NEEDS_TRIAGE: "Files outside any code area",
+    MergeRequestState.APPROVED: "All areas approved",
 }
 
 # Title and text of the next step for the author, per MR state.
@@ -79,6 +81,10 @@ NEXT_STEPS = {
         "Some changed files are not in any code area, so nobody owns them yet. "
         "The admin was alerted and will add an area or owner.",
     ),
+    MergeRequestState.APPROVED: (
+        "Nothing to do",
+        "All areas approved. Waiting for merge routing.",
+    ),
 }
 
 ACTION_LABELS = {
@@ -88,6 +94,10 @@ ACTION_LABELS = {
     "area_review.booked": "Reviewer booked",
     "mr.in_review": "Moved to review",
     "mr.needs_triage": "Needs triage: files outside any code area",
+    "area_review.approved": "Area approved",
+    "area_review.approval_reset": "Area approval lost",
+    "mr.changes_requested": "Reviewer requested changes",
+    "mr.approved": "Approved",
 }
 
 

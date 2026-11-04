@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.db import transaction
+from django.db.models import Max
 
 from audit.services import record
 from integrations import outbox
@@ -10,8 +11,10 @@ from reviews.lifecycle import AI_GATE_OPEN_STATES
 from reviews.models import MergeRequest, MergeRequestState
 
 # Review states of the AI Reviewer user. Any other state leaves the MR unchanged.
-PASS_STATES = frozenset({"approved"})
-FAIL_STATES = frozenset({"requested_changes", "reviewed"})
+APPROVED_STATE = "approved"
+REQUESTED_CHANGES_STATE = "requested_changes"
+PASS_STATES = frozenset({APPROVED_STATE})
+FAIL_STATES = frozenset({REQUESTED_CHANGES_STATE, "reviewed"})
 
 
 def check_ai_review(payload: dict) -> None:
@@ -23,8 +26,9 @@ def check_ai_review(payload: dict) -> None:
     first: a state that is newer than the event is still safe, an older one is
     ignored as not fresh. `approved` and `requested_changes` use the verdict
     note, `reviewed` uses the comment. Then lock the MR and act only when that
-    event is newer than the time the MR entered the AI gate. An MR awaiting the
-    AI review follows the state; an MR waiting on its author moves only on
+    event is newer than the time the MR entered the AI gate (and, for an MR
+    waiting on its author, than every open change request of a human reviewer).
+    An MR awaiting the AI review follows the state; an MR waiting on its author moves only on
     `approved` (the bot approved late).
     """
     user_id = settings.RMO_AI_REVIEWER_GITLAB_USER_ID
@@ -51,7 +55,14 @@ def check_ai_review(payload: dict) -> None:
             .get(pk=merge_request_id)
         )
         before = merge_request.state
-        if event_time <= merge_request.ai_gate_entered_at:
+        threshold = merge_request.ai_gate_entered_at
+        if before == MergeRequestState.WAITING_ON_AUTHOR:
+            # A human reviewer's open change request holds the MR until a push.
+            open_request = merge_request.area_reviews.aggregate(
+                latest=Max("changes_requested_at")
+            )["latest"]
+            threshold = max(threshold, open_request or threshold)
+        if event_time <= threshold:
             return
         if reviewer_state in PASS_STATES and before in AI_GATE_OPEN_STATES:
             new_state = MergeRequestState.AWAITING_BOOKING

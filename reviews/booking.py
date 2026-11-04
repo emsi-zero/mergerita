@@ -122,6 +122,42 @@ def _pick_slot(
     return None
 
 
+def book_follow_up(area_review: AreaReview) -> bool:
+    """Book a continuation session with the same reviewer and tell them. Return True when booked.
+
+    A session of the area review that is still pending is closed as
+    superseded and its minutes are released first. An unbooked area review has
+    no reviewer: any eligible owner is booked. The caller owns the transaction
+    and has called `lock_booking()` (INV-6).
+    """
+    session = area_review.sessions.filter(outcome=ReviewSessionOutcome.PENDING).first()
+    if session is not None:
+        session.outcome = ReviewSessionOutcome.SUPERSEDED
+        session.outcome_at = timezone.now()
+        session.save(update_fields=["outcome", "outcome_at"])
+        release_session_minutes(session)
+        record(
+            "orchestrator",
+            "review_session.superseded",
+            session,
+            {"outcome": ReviewSessionOutcome.PENDING},
+            {"outcome": session.outcome},
+        )
+    previous_reviewer_id = area_review.reviewer_id
+    if not book_area_review(
+        area_review, only_reviewer=area_review.reviewer, continuation=True
+    ):
+        return False
+    if area_review.reviewer_id != previous_reviewer_id:
+        return True  # the booking itself told the new reviewer
+    queue_notification(
+        [area_review.reviewer.gitlab_user_id],
+        f"Follow-up review of !{area_review.merge_request.iid} booked on "
+        f"{area_review.booked_day.isoformat()}.",
+    )
+    return True
+
+
 def release_session_minutes(session: ReviewSession) -> None:
     """Give a session's minutes back to its day's budget, when the day is today or later.
 

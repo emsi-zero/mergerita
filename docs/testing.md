@@ -252,6 +252,14 @@ This raises `AuditImmutableError`.
 5. Press "Cancel request". The author gets a second `notify` call, and the request disappears from the MR page.
 6. Post to `/panel/reviews/<id>/presence/` for a booking of another reviewer, or with a note over 500 characters. The first returns 404, the second 400, and nothing is stored.
 
+### N. Outcomes, approval and follow-up (RVO)
+
+1. Open an MR as in scenario B, so MR 1 is `in_review` with a booked reviewer per area (Sara on `api`, Reza on `web`).
+2. Reviewer approvals: `gmock approve 7 1 21`, then run the worker. The `api` area review becomes `approved`; MR 1 stays `in_review`. Then `gmock approve 7 1 22` and run the worker: MR 1 is `approved`. *Audit events* has two `area_review.approved` and one `mr.approved`. The panel shows the badge "Approved".
+3. Changes requested: open MR 2 the same way. `gmock request-changes 7 2 21`, then run the worker. MR 2 is `waiting_on_author`, the reviewers stay, and the author gets a `notify` call "Sara requested changes on !2.". An approval or a change request from before the last push is ignored.
+4. Follow-up: push to MR 2 and have the AI Reviewer approve again, then run the worker. No area review is created. The `api` area review gets a new pending session, marked "Follow-up", with Sara. A session that was still pending shows the outcome `superseded` and its minutes are free again. An area that GitLab still shows as approved gets no new session.
+5. Done, Need more time and Hand back (scenarios M and the panel): sign in as the booked reviewer and press each button on *My reviews*. Done changes no approval. Need more time books Sara again on the next day that fits. Hand back books another owner of the area.
+
 ---
 
 ## 5. Reset

@@ -1,6 +1,6 @@
 # TASKS: Review outcomes and continuity
 
-Spec: spec.md · Key: RVO · Route: project · State: in progress
+Spec: spec.md · Key: RVO · Route: project · State: done
 Checkpoint: `scripts/test.sh -q`
 
 ## Session 1 — Review sessions, booking refactor, outcomes
@@ -30,19 +30,19 @@ Resume: Done (code written, Gate A green; Gate B not run). Bookings are sessions
 
 ## Session 2 — Coverage check and follow-ups
 
-State: pending · Covers: RVO-6, RVO-7, RVO-8
+State: done · Covers: RVO-6, RVO-7, RVO-8
 
-- [ ] T1 — `reviews/lifecycle.py`: hooks and reconcile events on an MR in `in_review` enqueue `check_coverage` — RVO-6
-- [ ] T2 — `reviews/coverage.py` and its registration. Read verdict times, then states, outside the transaction. Under an MR lock, apply area approvals, the requested-changes move (notify the author), and the MR approval. Audit each change — RVO-7, INV-2, INV-3
-- [ ] T3 — `reviews/area_resolver.py`, follow-ups. Read the reviewers' states outside the transaction. Then un-approve reset areas, supersede pending sessions (releasing minutes), book follow-ups with `only_reviewer` and `continuation=True`, and move the MR to `in_review` — RVO-8
-- [ ] T4 — Mock GitLab: confirm that a human reviewer's `approve` and `request-changes` write the same system notes as for the bot (already the case per GLI-6). Optionally add a `reset-approvals` control for RVO-8 tests
-- [ ] T5 — Tests:
+- [x] T1 — `reviews/lifecycle.py`: hooks and reconcile events on an MR in `in_review` enqueue `check_coverage` — RVO-6
+- [x] T2 — `reviews/coverage.py` and its registration. Read verdict times, then states, outside the transaction. Under an MR lock, apply area approvals, the requested-changes move (notify the author), and the MR approval. Audit each change — RVO-7, INV-2, INV-3
+- [x] T3 — `reviews/area_resolver.py`, follow-ups. Read the reviewers' states outside the transaction. Then un-approve reset areas, supersede pending sessions (releasing minutes), book follow-ups with `only_reviewer` and `continuation=True`, and move the MR to `in_review` — RVO-8
+- [x] T4 — Mock GitLab: confirm that a human reviewer's `approve` and `request-changes` write the same system notes as for the bot (already the case per GLI-6). Optionally add a `reset-approvals` control for RVO-8 tests
+- [x] T5 — Tests:
   - `reviews/tests/test_coverage.py` (RVO-6, RVO-7)
   - `reviews/tests/test_followups.py` (RVO-8)
   - extend the `tests_e2e` GLI-12 flow with a subTest: the booked reviewers approve in the mock → the MR is `approved`
-- [ ] T6 — `docs/testing.md`: an outcomes and approval scenario. README: the MR states now end at `approved`
+- [x] T6 — `docs/testing.md`: an outcomes and approval scenario. README: the MR states now end at `approved`
 
 Gate A: `bin/craft-spec trace --session 2` green · `bin/craft-spec trace` green · checkpoint green · pylint, isort, black green
 Gate B: `reviewer` (lenses: spec, style, query) · `deep-reviewer` (logic, security on INV-2, INV-3, the stale-verdict rules, follow-up and reset handling)
 
-Resume: An MR can be approved end to end. Next: `/finish`.
+Resume: Code written, Gate A green; Gate B not run. `reviews/coverage.py` (check_coverage), `resolve_areas` follow-ups, `check_coverage` queued from lifecycle, panel `approved` entries, docs. Next: Gate B, then `/finish`.

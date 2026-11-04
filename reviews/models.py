@@ -135,6 +135,7 @@ class AreaReview(models.Model):
     booked_day = models.DateField(null=True, blank=True)
     slot_minutes = models.PositiveIntegerField(default=0)
     reason = models.TextField(blank=True, default="")
+    changes_requested_at = models.DateTimeField(null=True, blank=True)
 
 
 class ReviewSessionOutcome(models.TextChoices):  # pylint: disable=too-many-ancestors

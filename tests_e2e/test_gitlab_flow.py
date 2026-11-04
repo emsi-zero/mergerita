@@ -98,6 +98,28 @@ class GitLabFlowTest(LiveServerTestCase):
                     [API_REVIEWER_ID, WEB_REVIEWER_ID, BOT_ID],
                 )
 
+                with self.subTest("booked reviewers approve"):
+                    # given
+                    self.assertEqual(
+                        MergeRequest.objects.get(iid=1).state,
+                        MergeRequestState.IN_REVIEW,
+                    )
+
+                    # when
+                    for reviewer_id in (API_REVIEWER_ID, WEB_REVIEWER_ID):
+                        httpx.post(
+                            f"{base}/_mock/mrs/{PROJECT_ID}/1/reviewers/{reviewer_id}/state",
+                            json={"state": "approved"},
+                            timeout=30,
+                        ).raise_for_status()
+                    call_command("run_worker", "--once")
+
+                    # then
+                    self.assertEqual(
+                        MergeRequest.objects.get(iid=1).state,
+                        MergeRequestState.APPROVED,
+                    )
+
     def test_reconciliation_books_merge_request_without_webhooks(self) -> None:
         """GLI-13: Given the mock GitLab sends no webhooks, when an MR is opened
         and approved by the AI Reviewer and the worker reconciles, then the MR

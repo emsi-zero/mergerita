@@ -5,11 +5,14 @@ from django.db import transaction
 from django.db.models import Count
 
 from audit.services import record
+from integrations import outbox
 from integrations.adapters import Changes, get_gitlab_gateway
-from reviews import booking
+from reviews import booking, coverage
+from reviews.ai_gate import APPROVED_STATE
 from reviews.alerts import queue_admin_alert, queue_notification
 from reviews.models import (
     AreaReview,
+    AreaReviewState,
     CodeArea,
     MergeRequest,
     MergeRequestState,
@@ -18,14 +21,23 @@ from reviews.models import (
 
 
 def resolve_areas(payload: dict) -> None:
-    """Outbox handler: create the area reviews of an MR.
+    """Outbox handler: create the area reviews of an MR, or follow them up.
 
-    Fetch the changes first, with no transaction open. Then lock the MR and
-    do all writes in one atomic block. Return when the MR already has area reviews.
+    Fetch the changes (a new MR) or the approved reviewers' verdicts (an MR that
+    already has area reviews), with no transaction open. Then lock the MR and
+    do all writes in one atomic block.
     """
     merge_request_id = payload["merge_request_id"]
     target = MergeRequest.objects.get(pk=merge_request_id)
-    changes = get_gitlab_gateway().get_changes(target.project_id, target.iid)
+    has_reviews = target.area_reviews.exists()
+    verdicts: dict[int, coverage.Verdict] = {}
+    changes = None
+    if has_reviews:
+        verdicts = coverage.read_verdicts(
+            get_gitlab_gateway(), target, [AreaReviewState.APPROVED]
+        )
+    else:
+        changes = get_gitlab_gateway().get_changes(target.project_id, target.iid)
     with transaction.atomic():
         merge_request = (
             MergeRequest.objects.select_for_update(of=("self",))
@@ -34,11 +46,53 @@ def resolve_areas(payload: dict) -> None:
         )
         if (
             merge_request.state != MergeRequestState.AWAITING_BOOKING
-            or merge_request.area_reviews.exists()
+            or merge_request.area_reviews.exists() != has_reviews
         ):
             return
         booking.lock_booking()
-        _resolve(merge_request, changes)
+        if has_reviews:
+            _follow_up(merge_request, verdicts)
+        else:
+            _resolve(merge_request, changes)
+
+
+def _follow_up(
+    merge_request: MergeRequest, verdicts: dict[int, coverage.Verdict]
+) -> None:
+    """Book a follow-up session for each area review that is not approved (RVO-8).
+
+    An approved area review without a fresh `approved` from its reviewer loses
+    its mark first. The follow-up is `booking.book_follow_up`. No area review
+    is created. The MR moves to review even when a follow-up found no fit: that
+    area review is unbooked, an admin alert is queued, and it blocks approval.
+    A coverage check is queued at once.
+    """
+    area_reviews = list(
+        AreaReview.objects.select_for_update(of=("self",))
+        .select_related("merge_request", "reviewer")
+        .filter(merge_request=merge_request)
+        .order_by("pk")
+    )
+    # The author pushed: every open change request is closed.
+    merge_request.area_reviews.update(changes_requested_at=None)
+    for area_review in area_reviews:
+        if area_review.state == AreaReviewState.APPROVED:
+            if coverage.is_fresh(
+                merge_request, verdicts.get(area_review.pk), APPROVED_STATE
+            ):
+                continue
+            coverage.reset_approval(area_review)
+        booking.book_follow_up(area_review)
+    merge_request.state = MergeRequestState.IN_REVIEW
+    merge_request.save(update_fields=["state"])
+    record(
+        "orchestrator",
+        "mr.in_review",
+        merge_request,
+        {"state": MergeRequestState.AWAITING_BOOKING},
+        {"state": merge_request.state},
+    )
+    outbox.enqueue("check_coverage", {"merge_request_id": merge_request.pk})
 
 
 def _resolve(merge_request: MergeRequest, changes: Changes) -> None:
