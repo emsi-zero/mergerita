@@ -224,6 +224,15 @@
       "approved_by": "developer",
       "note": "",
       "session_id": null
+    },
+    {
+      "kind": "spec",
+      "spec": "2026-11-04-merge-routing-daily-retry",
+      "sha256": "dcca3e73b6b893f0ed485bf0e860cd3aa72d2e7dcde15b777199e93a8cbdf996",
+      "approved_at": "2026-11-04T10:10:05+00:00",
+      "approved_by": "developer",
+      "note": "",
+      "session_id": null
     }
   ]
 }

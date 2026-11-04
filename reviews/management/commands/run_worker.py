@@ -4,6 +4,7 @@ from django.conf import settings
 from django.core.management.base import BaseCommand
 
 from integrations.outbox import dispatch_due
+from reviews.merge_retry import run_daily_retry
 from reviews.reconciler import reconcile_all
 from reviews.worker import process_next_event
 
@@ -26,6 +27,7 @@ class Command(BaseCommand):
                 next_reconcile = (
                     time.monotonic() + settings.RMO_RECONCILE_INTERVAL_SECONDS
                 )
+            run_daily_retry()
             handled = process_next_event()
             dispatched = dispatch_due()
             if handled or dispatched:

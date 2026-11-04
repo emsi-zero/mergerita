@@ -269,6 +269,8 @@ This raises `AuditImmutableError`.
 5. Merge before approval: `gmock merge 7 3 31` on an MR that is still `in_review`. The row has no merge owner and the violation `before_approval`, and the admin gets an alert.
 6. Lost webhook: `gmock webhooks off`, merge an approved MR, run the reconciler. A `reconcile` inbox event with the action `merged` is stored, and handling it records the merge as above.
 7. Revoked approval: with an approved MR, remove an approval in the mock (`gmock request-changes 7 4 21`). After the worker runs, MR 4 is back in `in_review` (or `waiting_on_author`), the assignment has `cancelled_at`, and Dana gets "Do not merge !4 ...". The next approval assigns it again.
+8. Daily retry (MRDR): with no merge owner free, bring MR 5 to `approved`; the admin gets "no merge owner fits". In *Merge routing settings*, set *Daily retry time* to a minute from now (`Asia/Tehran`). A time such as `25:00` is rejected. When the worker passes that time, *Audit events* has `merge.retry_run` with the trigger `daily`, and the admin gets one alert "1 approved MR(s) still have no merge owner: 7:5 ... — waiting 0 day(s)". Later passes the same day do nothing.
+9. Manual retry: make Dana a merge owner again, open *Merge requests*, select MR 5 and one MR that is not approved, and run the action *Retry merge routing*. The page shows "1 assigned, 0 still unassigned, 1 skipped.", MR 5 has an open assignment, and Dana gets the chat message.
 
 ---
 

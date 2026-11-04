@@ -18,7 +18,9 @@ from reviews.models import (
 )
 
 
-def assign_merge(merge_request: MergeRequest) -> MergeAssignment | None:
+def assign_merge(
+    merge_request: MergeRequest, *, alert_on_no_fit: bool = True
+) -> MergeAssignment | None:
     """Assign the MR to a merge owner and window. Return None when nobody fits.
 
     Candidates are merge owners who are not the author and not a current
@@ -27,7 +29,8 @@ def assign_merge(merge_request: MergeRequest) -> MergeAssignment | None:
     their daily limit. The best candidate has the earliest window day, then the
     fewest assignments that day, then the earliest window, then the lowest
     person id. A reason is stored, the merge owner is told, and an audit event
-    is written. When nobody fits, an admin alert is queued.
+    is written. When nobody fits, an admin alert is queued, unless
+    `alert_on_no_fit` is false (the retry sends one summary instead, MRDR-3).
 
     The caller owns the transaction and already holds the MR lock and
     `booking.lock_booking()`: the count and the insert are then serial (INV-1).
@@ -48,12 +51,16 @@ def assign_merge(merge_request: MergeRequest) -> MergeAssignment | None:
             "merge.unassigned",
             merge_request,
             None,
-            {"horizon_days": settings.RMO_BOOKING_HORIZON_DAYS},
+            {
+                "horizon_days": settings.RMO_BOOKING_HORIZON_DAYS,
+                "retry": not alert_on_no_fit,
+            },
         )
-        queue_admin_alert(
-            f"MR {merge_request.project_id}:{merge_request.iid}: no merge owner fits "
-            f"within {settings.RMO_BOOKING_HORIZON_DAYS} days."
-        )
+        if alert_on_no_fit:
+            queue_admin_alert(
+                f"MR {merge_request.project_id}:{merge_request.iid}: no merge owner "
+                f"fits within {settings.RMO_BOOKING_HORIZON_DAYS} days."
+            )
         return None
     person, window, used, limit = fit
     if person.pk in barred:

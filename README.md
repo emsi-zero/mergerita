@@ -92,6 +92,7 @@ Set it up in the admin:
 
 1. In *Persons*, tick *Is merge owner* for each person who may merge. Set *Merge times* to a comma-separated list of `HH:MM` times in the app's time zone (`Asia/Tehran`), for example `10:00, 15:00`. Set *Daily merge limit* to override the default, or leave it empty. A limit of 0 means the person takes no merges.
 2. In *Merge routing settings*, set the default daily merge limit (5) and the merge window length in minutes (30). Merge owners can merge any area.
-3. A merge owner sees the assigned MRs on *My merges* (`/panel/merges/`) and gets a chat message for each. When an approval is revoked before the merge, the assignment is cancelled and the merge owner is told.
+3. When no merge owner fits an approved MR, the admins get an alert, and the worker tries again every day at the *Daily retry time* in *Merge routing settings* (default 08:00, `Asia/Tehran`). After each daily retry, the admins get one alert that lists the MRs still without a merge owner. To retry at once, for example after adding a merge owner, select the MRs in *Merge requests* and run the action *Retry merge routing*.
+4. A merge owner sees the assigned MRs on *My merges* (`/panel/merges/`) and gets a chat message for each. When an approval is revoked before the merge, the assignment is cancelled and the merge owner is told.
 
 To try it with the mock GitLab: `scripts/gitlab-mock merge PROJECT_ID IID USER_ID` sets the MR to merged by that user and sends the hook. Scenario O in `docs/testing.md` has the full steps.

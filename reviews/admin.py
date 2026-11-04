@@ -1,8 +1,10 @@
 from django import forms
-from django.contrib import admin
+from django.contrib import admin, messages
+from django.db.models import QuerySet
 from django.http import HttpRequest
 
 from integrations.admin import ReadOnlyAdmin
+from reviews import merge_retry
 from reviews.models import (
     AreaReview,
     CapacityDay,
@@ -69,5 +71,28 @@ class MergeRoutingSettingsAdmin(admin.ModelAdmin):
 
 for model in (Leave, CodeArea, Ownership):
     admin.site.register(model)
-for model in (MergeRequest, AreaReview, CapacityDay, MergeAssignment):
+
+
+@admin.register(MergeRequest)
+class MergeRequestAdmin(ReadOnlyAdmin):
+    """Read-only, apart from the "Retry merge routing" action (MRDR-4)."""
+
+    actions = ["retry_merge_routing"]
+
+    @admin.action(description="Retry merge routing", permissions=["change"])
+    def retry_merge_routing(
+        self, request: HttpRequest, queryset: QuerySet[MergeRequest]
+    ) -> None:
+        result = merge_retry.retry_unassigned(
+            merge_retry.ADMIN, list(queryset.values_list("pk", flat=True))
+        )
+        self.message_user(
+            request,
+            f"{result.assigned} assigned, {len(result.unassigned)} still unassigned, "
+            f"{result.skipped} skipped.",
+            messages.SUCCESS,
+        )
+
+
+for model in (AreaReview, CapacityDay, MergeAssignment):
     admin.site.register(model, ReadOnlyAdmin)

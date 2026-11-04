@@ -270,6 +270,10 @@ class CoverageTest(TestCase):
                 merge_request.refresh_from_db()
                 self.assertEqual(merge_request.state, mr_state)
                 self.assertEqual(
+                    merge_request.approved_at is not None,
+                    mr_state == MergeRequestState.APPROVED,
+                )
+                self.assertEqual(
                     list(
                         merge_request.area_reviews.order_by("pk").values_list(
                             "state", flat=True

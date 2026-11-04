@@ -1,4 +1,5 @@
 import re
+from datetime import time
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -82,6 +83,8 @@ class MergeRequest(models.Model):
     head_sha_at = models.DateTimeField(null=True, blank=True)
     # GitLab's address of the MR. Null until a hook or reconciliation carries it.
     web_url = models.URLField(max_length=500, null=True, blank=True)
+    # When the MR last moved to `approved`. Null for MRs approved before it was recorded.
+    approved_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         constraints = [
@@ -274,6 +277,10 @@ class MergeRoutingSettings(models.Model):
     merge_window_minutes = models.PositiveIntegerField(
         default=30, db_default=30, validators=[MinValueValidator(1)]
     )
+    # Local time (TIME_ZONE) of the daily retry of unassigned approved MRs.
+    daily_retry_time = models.TimeField(default=time(8, 0), db_default=time(8, 0))
+    # The local day the daily retry last claimed. Written only by the retry.
+    last_retry_on = models.DateField(null=True, blank=True, editable=False)
 
     @classmethod
     def load(cls) -> "MergeRoutingSettings":

@@ -308,7 +308,8 @@ def _notify_author(merge_request: MergeRequest, recorded: list[AreaReview]) -> N
 
 def _approve(merge_request: MergeRequest) -> None:
     merge_request.state = MergeRequestState.APPROVED
-    merge_request.save(update_fields=["state"])
+    merge_request.approved_at = timezone.now()
+    merge_request.save(update_fields=["state", "approved_at"])
     record(
         "gitlab",
         "mr.approved",
