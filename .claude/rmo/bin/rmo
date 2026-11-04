@@ -1,0 +1,775 @@
+#!/usr/bin/env python3
+"""rmo - the merge-orchestrator engineering workflow, in one stdlib-only CLI.
+
+Spec lifecycle
+    rmo new --route task|project --title "..." [--key KEY]
+    rmo status [--quiet]
+    rmo approve [--note "..."]        record the developer's approval of spec.md
+    rmo trace [--session N]           one test per acceptance criterion
+    rmo log "<heading>" ["<line>" ...] append an entry to the active log.md
+    rmo close                         archive the session, clear ACTIVE
+
+Checks (commands come from .claude/rmo/config.json)
+    rmo check <tests|lint|imports|format|migrations> [-- extra args]
+    rmo check run -- <any command>     record an ad-hoc command
+    rmo gate-a [--session N] [--log "Session N Gate A"] [-- test args]
+    rmo risk [<base>]                  propose a risk tier from the changed paths
+
+Hooks (wired in .claude/settings.json)
+    rmo hook start | gate | stop
+
+State lives in .claude/rmo/state/. approvals.json is committed; logs/ is not.
+Kill switch for every hook: RMO_HOOKS=off.
+"""
+
+import datetime
+import fnmatch
+import hashlib
+import json
+import os
+import pathlib
+import re
+import shlex
+import subprocess
+import sys
+
+HERE = pathlib.Path(__file__).resolve().parent
+RMO_DIR = HERE.parent
+TEMPLATES = RMO_DIR / "templates"
+GATED_ROUTES = ("task", "project")
+
+ROW_ID = re.compile(r"^\|\s*([A-Z][A-Z0-9]*-\d+)\s*\|")
+HEADING = re.compile(r"^#{1,6}\s+(.*)$")
+TEST_DEF = re.compile(r"^\s*(?:async\s+)?def\s+(test\w*)|^\s*class\s+(\w+)")
+
+
+# --------------------------------------------------------------------------
+# paths and state
+# --------------------------------------------------------------------------
+
+
+def now():
+    return datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
+
+
+def repo_root(cwd=None):
+    start = pathlib.Path(cwd or os.getcwd()).resolve()
+    env = os.environ.get("CLAUDE_PROJECT_DIR")
+    if env and (pathlib.Path(env) / ".claude" / "rmo").is_dir() and not cwd:
+        return pathlib.Path(env).resolve()
+    for candidate in [start, *start.parents]:
+        if (candidate / ".claude" / "rmo" / "config.json").is_file():
+            return candidate
+    return RMO_DIR.parent.parent
+
+
+def config(root):
+    return json.loads((root / ".claude" / "rmo" / "config.json").read_text())
+
+
+def state_dir(root):
+    path = root / ".claude" / "rmo" / "state"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def read_json(path, default):
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return default
+
+
+def write_json(path, data):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    os.replace(tmp, path)
+
+
+def session(root):
+    return read_json(state_dir(root) / "session.json", {})
+
+
+def save_session(root, data):
+    write_json(state_dir(root) / "session.json", data)
+
+
+def specs_dir(root):
+    return root / ".claude" / "specs"
+
+
+def active_spec(root):
+    """Return the active spec directory, or None."""
+    try:
+        name = (specs_dir(root) / "ACTIVE").read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    path = specs_dir(root) / name
+    return path if name and path.is_dir() else None
+
+
+def sha256(path):
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def approvals(root):
+    return read_json(state_dir(root) / "approvals.json", {"approvals": []})["approvals"]
+
+
+def spec_state(root):
+    """Return (state, detail). state: none | not approved | approved | stale."""
+    directory = active_spec(root)
+    if directory is None or not (directory / "spec.md").is_file():
+        return "none", {}
+    current = sha256(directory / "spec.md")
+    mine = [a for a in approvals(root) if a.get("spec") == directory.name]
+    detail = {"spec": directory.name, "path": directory / "spec.md", "sha256": current}
+    if not mine:
+        return "not approved", detail
+    detail["approved_sha256"] = mine[-1]["sha256"]
+    if any(a["sha256"] == current for a in mine):
+        return "approved", detail
+    return "stale", detail
+
+
+def venv_path(root, cfg):
+    """The configured venv, or the main checkout's venv when this is a worktree."""
+    local = root / cfg.get("venv", ".venv")
+    if local.exists():
+        return str(local)
+    try:
+        common = subprocess.run(
+            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+            cwd=root, capture_output=True, text=True, check=True,
+        ).stdout.strip()
+        main = pathlib.Path(common).parent / cfg.get("venv", ".venv")
+        if main.exists():
+            return str(main)
+    except (OSError, subprocess.CalledProcessError):
+        pass
+    return str(local)
+
+
+def append_log(directory, heading, lines):
+    stamp = now().strftime("%Y-%m-%d %H:%M UTC")
+    with (directory / "log.md").open("a", encoding="utf-8") as handle:
+        handle.write("\n## %s — %s\n" % (stamp, heading))
+        for line in lines:
+            handle.write(line.rstrip() + "\n")
+
+
+def arg(argv, flag, default=None):
+    if flag in argv:
+        index = argv.index(flag)
+        if index + 1 < len(argv):
+            return argv[index + 1]
+    return default
+
+
+def split_dashdash(argv):
+    if "--" in argv:
+        index = argv.index("--")
+        return argv[:index], argv[index + 1:]
+    return argv, []
+
+
+# --------------------------------------------------------------------------
+# new / status / approve / close / log
+# --------------------------------------------------------------------------
+
+
+def slugify(text):
+    return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")[:48].strip("-")
+
+
+def default_key(title):
+    words = [w for w in re.findall(r"[A-Za-z]+", title) if w.lower() not in {"a", "an", "the", "of", "for", "and", "to", "in"}]
+    return "".join(w[0] for w in words[:4]).upper() or "SPEC"
+
+
+def render(name, values):
+    text = (TEMPLATES / name).read_text(encoding="utf-8")
+    for key, value in values.items():
+        text = text.replace("{%s}" % key, value)
+    return text
+
+
+def cmd_new(argv, root):
+    route = arg(argv, "--route")
+    title = arg(argv, "--title")
+    if route not in GATED_ROUTES or not title:
+        print("usage: rmo new --route task|project --title \"...\" [--key KEY]", file=sys.stderr)
+        return 2
+    if active_spec(root) is not None:
+        print("A spec is already active: %s. Close it first with `rmo close`." % active_spec(root).name, file=sys.stderr)
+        return 1
+    key = arg(argv, "--key") or default_key(title)
+    today = now().strftime("%Y-%m-%d")
+    directory = specs_dir(root) / ("%s-%s" % (today, slugify(title)))
+    if directory.exists():
+        print("%s already exists." % directory, file=sys.stderr)
+        return 1
+    directory.mkdir(parents=True)
+    values = {"title": title, "key": key, "route": route, "date": today}
+    names = ["spec.md", "tasks.md", "log.md"] + (["design.md"] if route == "project" else [])
+    for name in names:
+        (directory / name).write_text(render(name, values), encoding="utf-8")
+    (specs_dir(root) / "ACTIVE").write_text(directory.name + "\n", encoding="utf-8")
+    save_session(root, {"route": route, "spec": directory.name, "started_at": now().isoformat(), "checks": []})
+    print("Created %s (route %s, key %s). The spec gate is shut until `rmo approve`." % (directory.relative_to(root), route, key))
+    return 0
+
+
+def spec_lint(text):
+    """Return the problems that make a spec not ready for approval."""
+    problems = []
+    if "<!--" in text:
+        problems.append("template comments (<!-- ... -->) are still in spec.md")
+    for placeholder in ("<trigger>", "<component>", "<observable response>", "<the realistic bug", "<invariant>", "<catalogue IDs>", "<mechanism>"):
+        if placeholder in text:
+            problems.append("placeholder %s is still in spec.md" % placeholder)
+    if not re.search(r"Risk:\s*(low|high)\b", text):
+        problems.append("the header has no `Risk: low` or `Risk: high`")
+    if not criteria_ids(text):
+        problems.append("the Acceptance criteria table has no `| KEY-N |` rows")
+    return problems
+
+
+def cmd_approve(argv, root):
+    directory = active_spec(root)
+    if directory is None:
+        print("No active spec.", file=sys.stderr)
+        return 1
+    text = (directory / "spec.md").read_text(encoding="utf-8")
+    problems = spec_lint(text)
+    if problems:
+        print("Not recorded. Fix spec.md first:\n  - " + "\n  - ".join(problems), file=sys.stderr)
+        return 1
+    digest = sha256(directory / "spec.md")
+    data = read_json(state_dir(root) / "approvals.json", {"approvals": []})
+    data["approvals"].append({
+        "spec": directory.name, "sha256": digest, "approved_at": now().isoformat(),
+        "note": arg(argv, "--note", ""),
+    })
+    write_json(state_dir(root) / "approvals.json", data)
+    append_log(directory, "spec approved", ["sha256 %s" % digest[:12]] + ([arg(argv, "--note")] if arg(argv, "--note") else []))
+    print("Approved %s (sha256 %s). The spec gate is open." % (directory.name, digest[:12]))
+    return 0
+
+
+def tasks_summary(directory):
+    try:
+        text = (directory / "tasks.md").read_text(encoding="utf-8")
+    except OSError:
+        return {}
+    done = len(re.findall(r"^\s*- \[x\]", text, re.MULTILINE | re.IGNORECASE))
+    todo = len(re.findall(r"^\s*- \[ \]", text, re.MULTILINE))
+    sessions = re.findall(r"^## (Session \d+)[^\n]*\n+State:\s*([^\n·]+)", text, re.MULTILINE)
+    nxt = re.search(r"^\s*- \[ \]\s*(.+)$", text, re.MULTILINE)
+    return {"done": done, "todo": todo, "sessions": sessions, "next": nxt.group(1)[:140] if nxt else ""}
+
+
+def status_lines(root):
+    directory = active_spec(root)
+    sess = session(root)
+    if directory is None and not sess:
+        return []
+    lines = ["rmo workflow: work in progress."]
+    state, detail = spec_state(root)
+    lines.append("  spec      %s  [%s]" % (directory.relative_to(root) if directory else "none", state))
+    lines.append("  route     %s" % sess.get("route", "not recorded"))
+    if directory is not None:
+        header = (directory / "spec.md").read_text(encoding="utf-8").split("\n", 4)[:4]
+        risk = re.search(r"Risk:\s*(\w+)", "\n".join(header))
+        lines.append("  risk      %s" % (risk.group(1) if risk else "not set"))
+        summary = tasks_summary(directory)
+        if summary:
+            lines.append("  tasks     %d done, %d open" % (summary["done"], summary["todo"]))
+            for name, st in summary["sessions"]:
+                lines.append("            %s: %s" % (name, st.strip()))
+            if summary["next"]:
+                lines.append("  next      %s" % summary["next"])
+    latest = {}
+    for check in sess.get("checks", []):
+        latest[check.get("label")] = check
+    if latest:
+        lines.append("  checks    " + " · ".join(
+            "%s %s" % (label, "PASS" if c.get("exit_code") == 0 else "FAIL") for label, c in latest.items()))
+    if state == "not approved":
+        lines.append("  gate      shut: present the spec and wait for the developer's approval.")
+    elif state == "stale":
+        lines.append("  gate      shut: spec.md changed after approval. Show the delta, get approval, `rmo approve`.")
+    return lines
+
+
+def cmd_status(argv, root):
+    lines = status_lines(root)
+    if not lines:
+        if "--quiet" not in argv:
+            print("No active spec and no session.")
+        return 1
+    print("\n".join(lines))
+    return 0
+
+
+def cmd_close(argv, root):
+    directory = active_spec(root)
+    sess = session(root)
+    archived = None
+    if sess:
+        archive = state_dir(root) / "archive"
+        archive.mkdir(exist_ok=True)
+        archived = archive / ("session-%s.json" % now().strftime("%Y%m%dT%H%M%SZ"))
+        sess["ended_at"] = now().isoformat()
+        write_json(archived, sess)
+        (state_dir(root) / "session.json").unlink()
+    if directory is not None:
+        append_log(directory, "spec closed", ["Session archived: %s" % (archived.relative_to(root) if archived else "none")])
+        (specs_dir(root) / "ACTIVE").unlink()
+    print("Closed. %s" % (directory.name if directory else "No active spec."))
+    return 0
+
+
+def cmd_log(argv, root):
+    directory = active_spec(root)
+    if directory is None or not argv:
+        print("usage: rmo log \"<heading>\" [\"<line>\" ...]  (needs an active spec)", file=sys.stderr)
+        return 2
+    append_log(directory, argv[0], argv[1:])
+    return 0
+
+
+# --------------------------------------------------------------------------
+# checks
+# --------------------------------------------------------------------------
+
+
+def summarize(kind, output, exit_code):
+    lines = [line for line in output.splitlines() if line.strip()]
+    if kind == "pytest":
+        for line in reversed(lines):
+            if re.search(r"\b(passed|failed|error|errors|no tests ran)\b", line):
+                summary = line.strip("= ").strip()
+                break
+        else:
+            summary = lines[-1] if lines else "no output"
+    elif kind == "pylint":
+        rated = [line for line in lines if "rated at" in line]
+        summary = rated[-1].strip() if rated else (lines[-1] if lines else "no output")
+    else:
+        summary = "clean" if exit_code == 0 else (lines[-1] if lines else "no output")
+    return summary
+
+
+def failure_excerpt(kind, output, limit=40):
+    lines = output.splitlines()
+    if kind == "pytest":
+        start = next((i for i, line in enumerate(lines) if "= FAILURES =" in line or "= ERRORS =" in line), None)
+        if start is not None:
+            lines = lines[start:]
+    elif kind == "pylint":
+        lines = [line for line in lines if re.match(r"^\S+\.py:\d+", line)] or lines
+    return "\n".join(lines[:limit] if kind != "plain" else lines[-limit:])
+
+
+def record_check(root, label, command, exit_code, log=None, summary=""):
+    sess = session(root)
+    if not sess:
+        return
+    sess.setdefault("checks", []).append({
+        "label": label, "command": command, "exit_code": exit_code,
+        "at": now().isoformat(), "log": log, "summary": summary,
+    })
+    save_session(root, sess)
+
+
+def build_command(root, cfg, label, extra):
+    spec = cfg["checks"][label]
+    command = spec["command"].replace("{venv}", venv_path(root, cfg))
+    if extra:
+        if spec.get("args_mode") == "replace_paths":
+            # Keep the executable prefix, swap the target paths for the given ones.
+            words = shlex.split(command)
+            exe = next(i for i, w in enumerate(words) if w.endswith("pylint"))
+            command = shlex.join(words[: exe + 1] + extra)
+        else:
+            command = command + " " + shlex.join(extra)
+    return command, spec.get("summary", "plain")
+
+
+def run_check(root, label, command, kind, quiet=False):
+    logs = state_dir(root) / "logs"
+    logs.mkdir(exist_ok=True)
+    log = logs / ("%s-%s.log" % (now().strftime("%Y%m%dT%H%M%SZ"), label))
+    proc = subprocess.run(command, shell=True, cwd=root, capture_output=True, text=True)
+    output = proc.stdout + proc.stderr
+    log.write_text("$ %s\n%s\nexit %d\n" % (command, output, proc.returncode), encoding="utf-8")
+    summary = summarize(kind, output, proc.returncode)
+    record_check(root, label, command, proc.returncode, str(log.relative_to(root)), summary)
+    if not quiet:
+        status = "PASS" if proc.returncode == 0 else "FAIL (exit %d)" % proc.returncode
+        print("%-10s %s — %s" % (label, status, summary))
+        if proc.returncode != 0:
+            print(failure_excerpt(kind, output))
+            print("full log: %s" % log.relative_to(root))
+    return proc.returncode, summary
+
+
+def cmd_check(argv, root):
+    own, extra = split_dashdash(argv)
+    cfg = config(root)
+    if not own:
+        print("usage: rmo check <%s|run> [-- args]" % "|".join(cfg["checks"]), file=sys.stderr)
+        return 2
+    label = own[0]
+    if label == "run":
+        if not extra:
+            print("usage: rmo check run -- <command>", file=sys.stderr)
+            return 2
+        command, kind = shlex.join(extra), "plain"
+        label = arg(own, "--label", "run")
+    elif label in cfg["checks"]:
+        command, kind = build_command(root, cfg, label, extra)
+    else:
+        print("unknown check %r. Known: %s" % (label, ", ".join(cfg["checks"])), file=sys.stderr)
+        return 2
+    code, _ = run_check(root, label, command, kind)
+    return code
+
+
+def cmd_gate_a(argv, root):
+    own, extra = split_dashdash(argv)
+    cfg = config(root)
+    results = []
+    worst = 0
+    for label in cfg["gate_a"]:
+        command, kind = build_command(root, cfg, label, extra if label == cfg["checkpoint"] else [])
+        code, summary = run_check(root, label, command, kind)
+        results.append((label, code, summary))
+        worst = worst or code
+    session_number = arg(own, "--session")
+    trace_code, trace_summary = (0, "no active spec")
+    if active_spec(root) is not None:
+        trace_code, trace_summary = trace(root, session_number, quiet=True)
+        print("%-10s %s — %s" % ("trace", "PASS" if trace_code == 0 else "FAIL", trace_summary))
+        if trace_code != 0:
+            trace(root, session_number, quiet=False, record=False)
+    worst = worst or trace_code
+    line = " · ".join("%s %s (%s)" % (label, "PASS" if code == 0 else "FAIL", summary) for label, code, summary in results)
+    line += " · trace %s (%s)" % ("PASS" if trace_code == 0 else "FAIL", trace_summary)
+    print("\nGate A: %s" % ("GREEN" if worst == 0 else "RED"))
+    heading = arg(own, "--log")
+    if heading and active_spec(root) is not None:
+        append_log(active_spec(root), heading, [line, "Gate A: %s" % ("green" if worst == 0 else "red")])
+        print("logged to %s/log.md" % active_spec(root).relative_to(root))
+    return 1 if worst else 0
+
+
+# --------------------------------------------------------------------------
+# trace
+# --------------------------------------------------------------------------
+
+
+def criteria_ids(text):
+    ids, inside = [], False
+    for line in text.splitlines():
+        heading = HEADING.match(line)
+        if heading:
+            inside = heading.group(1).strip().lower().startswith("acceptance criteria")
+            continue
+        match = ROW_ID.match(line) if inside else None
+        if match and match.group(1) not in ids:
+            ids.append(match.group(1))
+    return ids
+
+
+def session_covers(tasks_text, number, known):
+    inside = False
+    for line in tasks_text.splitlines():
+        heading = HEADING.match(line)
+        if heading:
+            m = re.match(r"session\s+(\d+)\b", heading.group(1), re.IGNORECASE)
+            inside = bool(m) and m.group(1) == str(number)
+            continue
+        if inside and "covers:" in line.lower():
+            listed = line.split(":", 1)[1] if line.lower().startswith("covers") else line.lower().split("covers:", 1)[1]
+            return [i for i in known if re.search(r"(?<![\w-])%s(?!\d)" % re.escape(i), listed, re.IGNORECASE)]
+    return None
+
+
+def test_files(root, cfg):
+    for directory in cfg["tests"]["dirs"]:
+        base = root / directory
+        if base.is_dir():
+            for path in sorted(base.rglob(cfg["tests"]["file_glob"])):
+                yield path
+
+
+def trace(root, session_number=None, quiet=False, record=True):
+    cfg = config(root)
+    directory = active_spec(root)
+    text = (directory / "spec.md").read_text(encoding="utf-8")
+    ids = all_ids = criteria_ids(text)
+    if not ids:
+        return 2, "spec.md has no `| KEY-N |` criterion rows"
+    scope = "all criteria"
+    if session_number:
+        try:
+            tasks_text = (directory / "tasks.md").read_text(encoding="utf-8")
+        except OSError:
+            tasks_text = ""
+        ids = session_covers(tasks_text, session_number, all_ids)
+        if not ids:
+            return 2, "tasks.md has no `## Session %s` block with a `Covers:` line" % session_number
+        scope = "session %s" % session_number
+    prefixes = sorted({i.rsplit("-", 1)[0] for i in all_ids})
+    pattern = re.compile(r"(?<![\w-])((?:%s)-\d+)(?!\d)" % "|".join(map(re.escape, prefixes)))
+    found = {i: [] for i in ids}
+    orphans = []
+    for path in test_files(root, cfg):
+        current = "<module>"
+        for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+            definition = TEST_DEF.match(line)
+            if definition:
+                current = definition.group(1) or definition.group(2)
+            for match in pattern.finditer(line):
+                where = "%s::%s" % (path.relative_to(root), current)
+                ident = match.group(1)
+                if ident in found:
+                    if where not in found[ident]:
+                        found[ident].append(where)
+                elif ident not in all_ids and where not in orphans:
+                    orphans.append("%s (%s)" % (where, ident))
+    missing = [i for i in ids if not found[i]]
+    doubled = [i for i in ids if len(found[i]) > 1]
+    code = 1 if missing else 0
+    summary = "%d/%d%s%s" % (len(ids) - len(missing), len(ids),
+                             ", %d with >1 test" % len(doubled) if doubled else "",
+                             ", %d orphan refs" % len(orphans) if orphans else "")
+    if not quiet:
+        print("trace: %s — %s" % (directory.name, scope))
+        for i in ids:
+            tests = found[i]
+            status = "MISSING" if not tests else ("WARN" if len(tests) > 1 else "OK")
+            print("  %-8s %-9s %s" % (status, i, ", ".join(tests) or "no test names this ID"))
+        for orphan in orphans:
+            print("  WARN     orphan    %s — not a criterion of this spec" % orphan)
+        print("result: %s — %s" % ("PASS" if code == 0 else "FAIL", summary))
+    if record:
+        record_check(root, "trace", "rmo trace" + (" --session %s" % session_number if session_number else ""), code, summary=summary)
+    return code, summary
+
+
+def cmd_trace(argv, root):
+    if active_spec(root) is None:
+        print("No active spec. Nothing to trace.", file=sys.stderr)
+        return 2
+    code, summary = trace(root, arg(argv, "--session"))
+    if code == 2:
+        print(summary, file=sys.stderr)
+    return code
+
+
+# --------------------------------------------------------------------------
+# risk
+# --------------------------------------------------------------------------
+
+
+def changed_paths(root, base):
+    paths = set()
+    for args in (["git", "diff", "--name-only", "%s...HEAD" % base], ["git", "diff", "--name-only", "HEAD"],
+                 ["git", "ls-files", "--others", "--exclude-standard"]):
+        proc = subprocess.run(args, cwd=root, capture_output=True, text=True)
+        paths.update(p for p in proc.stdout.splitlines() if p and not p.startswith(".claude/"))
+    return sorted(paths)
+
+
+def cmd_risk(argv, root):
+    cfg = config(root)
+    base = argv[0] if argv else "main"
+    paths = changed_paths(root, base)
+    hits = {}
+    for category, globs in cfg["risk_paths"].items():
+        matched = [p for p in paths if any(fnmatch.fnmatch(p, g) for g in globs)]
+        if matched:
+            hits[category] = matched
+    print("changed: %d files vs %s" % (len(paths), base))
+    for category, matched in hits.items():
+        print("  %-24s %s" % (category, ", ".join(matched)))
+    print("proposed: Risk: %s%s" % ("high" if hits else "low",
+          " — confirm against WORKFLOW.md §2: a path hit is a prompt to check, not a verdict" if hits else ""))
+    return 0
+
+
+# --------------------------------------------------------------------------
+# hooks
+# --------------------------------------------------------------------------
+
+PASS_WORD = r"(?:pass|passes|passed|passing|green)"
+DONE_CLAIM = re.compile(
+    r"`done`"
+    r"|\bstate\s*[:=]\s*\**\s*done\b"
+    r"|\bstatus\s*[:=]\s*\**\s*done\b"
+    r"|\b(?:is|are|now|marked|set\s+to|moved\s+to)\s+\**done\b"
+    r"|\bgate\s*a\b[^\n]{0,80}?\b" + PASS_WORD + r"\b"
+    r"|\bgate\s*b\b[^\n]{0,80}?\b" + PASS_WORD + r"\b",
+    re.IGNORECASE,
+)
+NEGATION = re.compile(
+    r"\b(?:not|no|never|cannot|without|until|unless|before|yet|blocked|pending|fail(?:s|ed)?|missing)\b|\w+n['’]t\b",
+    re.IGNORECASE,
+)
+CLAUSE_BREAK = re.compile(r"[.!?;:,\n]")
+
+
+def claims_done(text):
+    for match in DONE_CLAIM.finditer(text):
+        before = [m.end() for m in CLAUSE_BREAK.finditer(text, 0, match.start())]
+        start = before[-1] if before else 0
+        after = CLAUSE_BREAK.search(text, match.end())
+        clause = text[start: after.start() if after else len(text)]
+        if not NEGATION.search(clause):
+            return True
+    return False
+
+
+def last_assistant_text(payload):
+    message = payload.get("last_assistant_message")
+    if isinstance(message, str) and message.strip():
+        return message
+    try:
+        lines = pathlib.Path(payload["transcript_path"]).read_text(encoding="utf-8").splitlines()
+    except (KeyError, OSError, TypeError):
+        return ""
+    for raw in reversed(lines):
+        try:
+            entry = json.loads(raw)
+        except ValueError:
+            continue
+        msg = entry.get("message") or {}
+        if entry.get("type") == "assistant" and isinstance(msg.get("content"), list):
+            texts = [c.get("text", "") for c in msg["content"] if c.get("type") == "text"]
+            if any(t.strip() for t in texts):
+                return "\n".join(texts)
+    return ""
+
+
+def tool_target(payload):
+    data = payload.get("tool_input") or {}
+    return data.get("file_path") or data.get("notebook_path") or data.get("path")
+
+
+def hook_gate(payload, root):
+    target = tool_target(payload)
+    if not target:
+        return None
+    path = pathlib.Path(target)
+    if not path.is_absolute():
+        path = pathlib.Path(payload.get("cwd") or root) / path
+    path = path.resolve()
+    state_root = (root / ".claude" / "rmo" / "state").resolve()
+    if path == state_root or state_root in path.parents:
+        return ("rmo state files are written only by `.claude/rmo/bin/rmo` (approve, check, trace). "
+                "Never edit them by hand: an approval is the developer's decision, recorded by the CLI.")
+    try:
+        relative = path.relative_to(root)
+    except ValueError:
+        return None
+    if relative.parts and relative.parts[0] == ".claude":
+        return None
+    sess = session(root)
+    if sess.get("route") not in GATED_ROUTES:
+        return None
+    state, detail = spec_state(root)
+    if state == "approved":
+        return None
+    steps = {
+        "none": "No active spec. Load `rmo-spec`, run `.claude/rmo/bin/rmo new`, write the spec, present it, stop.",
+        "not approved": "Present the criteria, non-goals, risk and open questions of %s and wait. "
+                        "After the developer says approve: `.claude/rmo/bin/rmo approve`." % detail.get("path"),
+        "stale": "spec.md changed after approval (approved %s, now %s). Show the delta, get approval, append it to "
+                 "log.md, then `.claude/rmo/bin/rmo approve`." % (detail.get("approved_sha256", "")[:12], detail.get("sha256", "")[:12]),
+    }
+    return ("The spec gate is shut (route %s, spec %s). No file outside .claude/ is written until the developer "
+            "approves the spec.\n  blocked: %s\n  next: %s\nDo not write the file elsewhere to get around this. "
+            "RMO_HOOKS=off disables the hooks for one command." % (sess.get("route"), state, relative, steps[state]))
+
+
+def hook_stop(payload, root):
+    if payload.get("stop_hook_active"):
+        return None
+    sess = session(root)
+    if sess.get("route") not in GATED_ROUTES:
+        return None
+    if not claims_done(last_assistant_text(payload)):
+        return None
+    cfg = config(root)
+    latest = {}
+    for check in sess.get("checks", []):
+        latest[check.get("label")] = check
+    problems = []
+    state, _ = spec_state(root)
+    if state != "approved":
+        problems.append("the active spec is %s" % state)
+    for label in cfg["gate_a"] + ["trace"]:
+        check = latest.get(label)
+        if check is None:
+            problems.append("`%s` was never run through rmo" % label)
+        elif check.get("exit_code") != 0:
+            problems.append("the last `%s` failed (exit %s)" % (label, check.get("exit_code")))
+    if not problems:
+        return None
+    return ("Stop refused: the message claims done or a green gate, but %s.\n"
+            "Either run `.claude/rmo/bin/rmo gate-a` and fix until green, or correct the claim: the true state "
+            "is `blocked` or `in progress`, naming what is missing. Never report a check you did not run."
+            % "; ".join(problems))
+
+
+def cmd_hook(argv, root):
+    if os.environ.get("RMO_HOOKS", "").lower() == "off" or not argv:
+        return 0
+    try:
+        payload = json.loads(sys.stdin.read() or "{}")
+    except ValueError:
+        payload = {}
+    try:
+        if payload.get("cwd"):
+            root = repo_root(payload["cwd"])
+        kind = argv[0]
+        if kind == "start":
+            lines = status_lines(root)
+            if lines:
+                lines.append("  resume    read the spec and tasks.md of the active spec; do not re-explore the repo.")
+                print("\n".join(lines))
+        elif kind == "gate":
+            reason = hook_gate(payload, root)
+            if reason:
+                print(json.dumps({"hookSpecificOutput": {
+                    "hookEventName": "PreToolUse", "permissionDecision": "deny",
+                    "permissionDecisionReason": reason}}))
+        elif kind == "stop":
+            reason = hook_stop(payload, root)
+            if reason:
+                print(json.dumps({"decision": "block", "reason": reason}))
+    except Exception as error:  # a hook fails open, and says why on stderr
+        print("rmo hook %s failed open: %s" % (argv[0], error), file=sys.stderr)
+    return 0
+
+
+COMMANDS = {
+    "new": cmd_new, "status": cmd_status, "approve": cmd_approve, "trace": cmd_trace,
+    "log": cmd_log, "close": cmd_close, "check": cmd_check, "gate-a": cmd_gate_a,
+    "risk": cmd_risk, "hook": cmd_hook,
+}
+
+
+def main(argv):
+    if not argv or argv[0] not in COMMANDS:
+        print(__doc__)
+        return 2
+    return COMMANDS[argv[0]](argv[1:], repo_root())
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

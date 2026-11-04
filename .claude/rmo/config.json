@@ -1,0 +1,41 @@
+{
+  "comment": "Machine half of .claude/rmo/WORKFLOW.md. WORKFLOW.md is the human source and wins a disagreement: change it first, then this file. bin/rmo reads 'checks', 'gate_a', 'tests' and 'venv'. The hooks read nothing else. 'risk_paths' is read by `bin/rmo risk` to propose a risk tier from a diff; the spec author still decides.",
+  "venv": ".venv",
+  "checks": {
+    "tests": {
+      "command": "scripts/test.sh -q",
+      "args_mode": "append",
+      "summary": "pytest"
+    },
+    "lint": {
+      "command": "env DEBUG=1 {venv}/bin/pylint integrations audit reviews panel gitlab_mock orchestrator manage.py tests_e2e",
+      "args_mode": "replace_paths",
+      "summary": "pylint"
+    },
+    "imports": {
+      "command": "{venv}/bin/isort --check --diff . --skip .venv --skip .claude",
+      "summary": "plain"
+    },
+    "format": {
+      "command": "{venv}/bin/black --check . --exclude '/(\\.venv|\\.claude)/'",
+      "summary": "plain"
+    },
+    "migrations": {
+      "command": "env DEBUG=1 {venv}/bin/python manage.py makemigrations --check --dry-run",
+      "summary": "plain"
+    }
+  },
+  "gate_a": ["tests", "lint", "imports", "format", "migrations"],
+  "checkpoint": "tests",
+  "tests": {
+    "dirs": ["reviews/tests", "integrations/tests", "audit/tests", "panel/tests", "gitlab_mock/tests", "tests_e2e"],
+    "file_glob": "test_*.py"
+  },
+  "risk_paths": {
+    "locks_and_transactions": ["reviews/booking.py", "reviews/merge_router.py", "reviews/merge_retry.py", "reviews/lifecycle.py", "reviews/reconciler.py", "reviews/merges.py", "reviews/merge_confirmation.py"],
+    "inbox_outbox": ["integrations/inbox.py", "integrations/outbox.py", "reviews/outbox_handlers.py", "reviews/worker.py"],
+    "external_gitlab": ["integrations/gitlab.py", "integrations/adapters.py", "reviews/views.py"],
+    "auth": ["panel/auth_views.py", "panel/middleware.py", "panel/views.py", "orchestrator/settings.py", "orchestrator/urls.py", "*/admin.py"],
+    "migrations": ["*/migrations/*.py"]
+  }
+}

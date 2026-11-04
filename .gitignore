@@ -6,3 +6,6 @@ __pycache__/
 .pgsock/
 .claude/craft/logs/
 .claude/design/
+.claude/rmo/state/logs/
+.claude/rmo/state/session.json
+.claude/worktrees/

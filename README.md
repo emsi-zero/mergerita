@@ -96,3 +96,7 @@ Set it up in the admin:
 4. A merge owner sees the assigned MRs on *My merges* (`/panel/merges/`) and gets a chat message for each. When an approval is revoked before the merge, the assignment is cancelled and the merge owner is told.
 
 To try it with the mock GitLab: `scripts/gitlab-mock merge PROJECT_ID IID USER_ID` sets the MR to merged by that user and sends the hook. Scenario O in `docs/testing.md` has the full steps.
+
+## Engineering workflow
+
+Changes here follow the project's own spec-driven workflow in `.claude/rmo/` (start with `.claude/rmo/WORKFLOW.md`). In Claude Code, run `/rmo <request>`. Every route runs its checks through `.claude/rmo/bin/rmo`. On the task and project routes, the developer approves a spec before any code is written. `rmo gate-a` runs the tests, pylint, isort, black, `makemigrations --check`, and the criterion-to-test trace in one command.
