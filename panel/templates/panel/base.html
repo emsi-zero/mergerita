@@ -19,18 +19,25 @@
     {% if user.is_authenticated %}
     <nav aria-label="Sections" class="tabs">
       {% with current=request.resolver_match.url_name %}
-      <a href="{% url 'panel:mrs' %}" class="tab{% if current == 'mrs' or current == 'mr-detail' %} on{% endif %}">My MRs</a>
-      <a href="{% url 'panel:reviews' %}" class="tab{% if current == 'reviews' %} on{% endif %}">My reviews</a>
-      {% if user.person.is_merge_owner %}<a href="{% url 'panel:merges' %}" class="tab{% if current == 'merges' %} on{% endif %}">My merges</a>{% endif %}
+      <a href="{% url 'panel:mrs' %}" class="tab{% if current == 'mrs' or current == 'mr-detail' %} on{% endif %}">My MRs{% if tab_counts.mrs %}<span class="count">{{ tab_counts.mrs }}</span>{% endif %}</a>
+      <a href="{% url 'panel:reviews' %}" class="tab{% if current == 'reviews' %} on{% endif %}">My reviews{% if tab_counts.reviews %}<span class="count">{{ tab_counts.reviews }}</span>{% endif %}</a>
+      {% if user.person.is_merge_owner %}<a href="{% url 'panel:merges' %}" class="tab{% if current == 'merges' %} on{% endif %}">My merges{% if tab_counts.merges %}<span class="count">{{ tab_counts.merges }}</span>{% endif %}</a>{% endif %}
       <a href="{% url 'panel:availability' %}" class="tab{% if current|slice:':12' == 'availability' %} on{% endif %}">Availability</a>
       {% endwith %}
     </nav>
     <div class="who">
-      <div class="avatar">{{ user.username|slice:":2"|upper }}</div>
+      {% if panel_person %}
+      <div class="avatar" aria-hidden="true">{{ panel_initials }}</div>
+      <div class="who-text">
+        <div class="who-name">{{ panel_person.name }}</div>
+        {% if panel_areas %}<div class="muted who-areas">{{ panel_areas|join:" · " }}</div>{% endif %}
+      </div>
+      {% else %}
       <div class="who-name">{{ user.username }}</div>
+      {% endif %}
       <form method="post" action="{% url 'panel:logout' %}">
         {% csrf_token %}
-        <button type="submit" class="link">Sign out</button>
+        <button type="submit" class="btn btn-ghost btn-sm">Sign out</button>
       </form>
     </div>
     {% endif %}

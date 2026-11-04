@@ -2,20 +2,25 @@
 {% block content %}
 <div class="page-head">
   <h1>My merge requests</h1>
-  <div class="muted">{{ merge_requests|length }} merge requests</div>
+  <div class="muted">{{ open_count }} open · {{ action_count }} need your action</div>
 </div>
-<div class="stack">
-  {% for mr in merge_requests %}
-  <a class="card mr-card" href="{% url 'panel:mr-detail' mr.pk %}">
-    <div class="row">
-      <span class="mono muted">!{{ mr.iid }}</span>
-      <span class="mr-title">{{ mr.title }}</span>
-      <span class="badge {{ mr.badge_class }}">{{ mr.badge }}</span>
-    </div>
-    <div class="muted small">{{ mr.summary }}</div>
-  </a>
-  {% empty %}
-  <div class="muted">You have no merge requests.</div>
-  {% endfor %}
+{% if merge_requests %}
+<div class="split">
+  <div class="stack mr-list">
+    {% for mr in merge_requests %}
+    <a class="card mr-card{% if mr.pk == merge_request.pk %} on{% endif %}" href="{% url 'panel:mr-detail' mr.pk %}"{% if mr.pk == merge_request.pk %} aria-current="page"{% endif %}>
+      <div class="row">
+        <span class="mono muted">!{{ mr.iid }}</span>
+        <span class="mr-title">{{ mr.title }}</span>
+        <span class="badge {{ mr.badge_class }}">{{ mr.badge }}</span>
+      </div>
+      <div class="row meta muted small">{% if mr.project %}<span>{{ mr.project }}</span>{% endif %}<span>{{ mr.summary }}</span></div>
+    </a>
+    {% endfor %}
+  </div>
+  {% include "panel/_mr_detail.html" %}
 </div>
+{% else %}
+<div class="card empty muted">You have no merge requests.</div>
+{% endif %}
 {% endblock %}

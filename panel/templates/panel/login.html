@@ -9,11 +9,11 @@
     <label>Username{{ form.username }}</label>
     <label>Password{{ form.password }}</label>
     <input type="hidden" name="next" value="{{ next }}">
-    <button type="submit" class="primary">Sign in</button>
+    <button type="submit" class="btn btn-primary">Sign in</button>
   </form>
   {% endif %}
   {% if sso_enabled %}
-  <a href="{% url 'panel:sso-start' %}" class="primary login-sso">Sign in with GitLab</a>
+  <a href="{% url 'panel:sso-start' %}" class="btn btn-ghost login-sso">Sign in with GitLab</a>
   {% endif %}
 </section>
 {% endblock %}

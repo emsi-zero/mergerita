@@ -1,42 +1,44 @@
 {% extends "panel/base.html" %}
 {% block content %}
-<h1>My availability</h1>
+<div class="page-head">
+  <h1>My availability</h1>
+</div>
 <p class="muted lead">Booking only uses days you work, minus leave, up to your daily review budget. Changes apply to new bookings; existing ones stay.</p>
 <div class="columns">
   <section class="card">
     <form method="post" action="{% url 'panel:availability-days' %}">
       {% csrf_token %}
       <h2>Working days</h2>
-      <div class="muted small">Team default: {{ default_days }}</div>
+      <div class="muted small hint">Team default: {{ default_days }}</div>
       {{ days_form.non_field_errors }}
       {{ days_form.days.errors }}
       <div class="pills">
         {% for choice in days_form.days %}<label class="pill">{{ choice.tag }}<span>{{ choice.choice_label }}</span></label>{% endfor %}
       </div>
-      <button type="submit" class="primary">Save working days</button>
+      <button type="submit" class="btn btn-primary">Save working days</button>
     </form>
 
     <form method="post" action="{% url 'panel:availability-budget' %}">
       {% csrf_token %}
       <h2>Daily review budget</h2>
-      <div class="muted small">Organisation default {{ default_budget }} min</div>
+      <div class="muted small hint">Organisation default {{ default_budget }} min</div>
       {{ budget_form.minutes.errors }}
       <div class="pills">
         {% for choice in budget_form.minutes %}<label class="pill">{{ choice.tag }}<span>{{ choice.choice_label }}</span></label>{% endfor %}
       </div>
-      <button type="submit" class="primary">Save budget</button>
+      <button type="submit" class="btn btn-primary">Save budget</button>
     </form>
   </section>
 
   <section class="card">
     <h2>Leave</h2>
-    <div class="stack tight">
+    <div class="stack leaves">
       {% for leave in leaves %}
-      <div class="row leave">
+      <div class="row item">
         <span class="strong grow">{{ leave.start_date|date:"D j M" }} – {{ leave.end_date|date:"D j M" }}</span>
         <form method="post" action="{% url 'panel:availability-leave-delete' leave.pk %}">
           {% csrf_token %}
-          <button type="submit" class="remove">Remove</button>
+          <button type="submit" class="btn btn-ghost-danger btn-sm">Remove</button>
         </form>
       </div>
       {% empty %}
@@ -51,7 +53,7 @@
         <label>{{ field.label }}{{ field }}{{ field.errors }}</label>
         {% endfor %}
       </div>
-      <button type="submit" class="primary">Add leave</button>
+      <button type="submit" class="btn btn-primary">Add leave</button>
     </form>
   </section>
 </div>

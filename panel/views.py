@@ -1,5 +1,6 @@
 from collections.abc import Callable
 from datetime import date, datetime, timedelta
+from urllib.parse import urlsplit
 
 from django import forms
 from django.conf import settings
@@ -7,9 +8,9 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import F, OuterRef, Prefetch, Q, QuerySet, Subquery
 from django.http import Http404, HttpRequest, HttpResponse
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
-from django.views.generic import DetailView, ListView, RedirectView, TemplateView, View
+from django.views.generic import RedirectView, TemplateView, View
 
 from audit.models import AuditEvent
 from panel.forms import (
@@ -134,39 +135,54 @@ class PanelHomeView(PanelAccessMixin, RedirectView):
     pattern_name = "panel:mrs"
 
 
-class MyMergeRequestsView(
-    PanelAccessMixin, ListView
-):  # pylint: disable=too-many-ancestors
-    """List the signed-in developer's own MRs."""
+class MyMergeRequestsView(PanelAccessMixin, TemplateView):
+    """List the developer's own MRs, with the selected one's detail beside it (PNS-1).
+
+    The selected MR is the one in the URL, else the most recent one.
+    """
 
     template_name = "panel/mrs.html"
-    context_object_name = "merge_requests"
 
-    def get_queryset(self) -> QuerySet[MergeRequest]:
-        return (
+    def get_context_data(self, **kwargs: object) -> dict:
+        context = super().get_context_data(**kwargs)
+        merge_requests = list(
             MergeRequest.objects.filter(author=self.person)
             .prefetch_related("area_reviews")
             .order_by("-opened_at")
         )
-
-    def get_context_data(self, **kwargs: object) -> dict:
-        context = super().get_context_data(**kwargs)
-        for merge_request in context["merge_requests"]:
+        for merge_request in merge_requests:
             merge_request.badge, merge_request.badge_class = STATE_BADGES[
                 merge_request.state
             ]
             merge_request.summary = _summary(merge_request)
+            merge_request.project = _project_path(merge_request.web_url)
+        context["merge_requests"] = merge_requests
+        context["open_count"] = sum(
+            1 for mr in merge_requests if mr.state != MergeRequestState.MERGED
+        )
+        context["action_count"] = sum(
+            1
+            for mr in merge_requests
+            if mr.state == MergeRequestState.WAITING_ON_AUTHOR
+        )
+        selected_pk = self.kwargs.get("pk") or (
+            merge_requests[0].pk if merge_requests else None
+        )
+        if selected_pk is not None:
+            context.update(_detail_context(self.person, selected_pk))
         return context
 
 
-class MergeRequestDetailPanelView(PanelAccessMixin, DetailView):
-    """Show one of the developer's own MRs; any other MR is 404."""
+class MergeRequestDetailPanelView(
+    MyMergeRequestsView
+):  # pylint: disable=too-many-ancestors
+    """My MRs with one of the developer's own MRs selected; any other MR is 404."""
 
-    template_name = "panel/mr_detail.html"
-    context_object_name = "merge_request"
 
-    def get_queryset(self) -> QuerySet[MergeRequest]:
-        return MergeRequest.objects.filter(author=self.person).prefetch_related(
+def _detail_context(person: Person, pk: int) -> dict:
+    """Return the detail of one of `person`'s MRs; raise Http404 for any other."""
+    merge_request = get_object_or_404(
+        MergeRequest.objects.filter(author=person).prefetch_related(
             Prefetch(
                 "area_reviews",
                 queryset=AreaReview.objects.select_related("reviewer")
@@ -178,27 +194,36 @@ class MergeRequestDetailPanelView(PanelAccessMixin, DetailView):
                 queryset=_active_presence().select_related("requested_by"),
                 to_attr="active_presence",
             ),
-        )
-
-    def get_context_data(self, **kwargs: object) -> dict:
-        context = super().get_context_data(**kwargs)
-        merge_request = context["merge_request"]
-        area_reviews = list(merge_request.area_reviews.all())
-        merge_request.badge, merge_request.badge_class = STATE_BADGES[
-            merge_request.state
-        ]
-        context["area_reviews"] = area_reviews
-        today = timezone.localdate()
-        context["presence_requests"] = [
+        ),
+        pk=pk,
+    )
+    area_reviews = list(merge_request.area_reviews.all())
+    merge_request.badge, merge_request.badge_class = STATE_BADGES[merge_request.state]
+    merge_request.project = _project_path(merge_request.web_url)
+    today = timezone.localdate()
+    next_title, next_text = NEXT_STEPS[merge_request.state]
+    return {
+        "merge_request": merge_request,
+        "area_reviews": area_reviews,
+        "presence_requests": [
             (review, ask)
             for review in area_reviews
             if review.booked_day and review.booked_day >= today
             for ask in review.active_presence
-        ]
-        context["next_title"], context["next_text"] = NEXT_STEPS[merge_request.state]
-        context["size_warning"] = _size_warning(merge_request, area_reviews)
-        context["history"] = _history(merge_request, area_reviews)
-        return context
+        ],
+        "next_title": next_title,
+        "next_text": next_text,
+        "size_warning": _size_warning(merge_request, area_reviews),
+        "history": _history(merge_request, area_reviews),
+    }
+
+
+def _project_path(web_url: str | None) -> str:
+    """Return the project path in an MR's GitLab address, such as `shop/backend`."""
+    if not web_url:
+        return ""
+    path = urlsplit(web_url).path
+    return path.split("/-/", 1)[0].strip("/") if "/-/" in path else ""
 
 
 class MyReviewsView(PanelAccessMixin, TemplateView):

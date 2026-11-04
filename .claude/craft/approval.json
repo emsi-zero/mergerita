@@ -233,6 +233,15 @@
       "approved_by": "developer",
       "note": "",
       "session_id": null
+    },
+    {
+      "kind": "spec",
+      "spec": "2026-11-04-panel-design-alignment",
+      "sha256": "c8f1b7a20ac89300307ad592b752231612caaa8188faae0b9a1033be5efd3539",
+      "approved_at": "2026-11-04T12:42:15+00:00",
+      "approved_by": "developer",
+      "note": "",
+      "session_id": null
     }
   ]
 }

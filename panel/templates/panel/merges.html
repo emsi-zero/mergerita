@@ -3,10 +3,9 @@
 <div class="page-head">
   <h1>My merges</h1>
 </div>
-<div class="stack">
+<div class="reviews">
   {% for assignment in assignments %}
-  <section class="card">
-    <article class="review">
+    <article class="review card">
       <div class="review-head">
         <div class="review-title">
           <span class="mono muted">!{{ assignment.merge_request.iid }}</span>
@@ -17,7 +16,6 @@
       </div>
       <div class="muted small review-meta">Window {{ assignment.window|date:"D j M, H:i" }} · Author {{ assignment.merge_request.author.name }} · Approved by {{ assignment.approvers|join:", " }}</div>
     </article>
-  </section>
   {% empty %}
   <div class="card empty muted">Nothing to merge.</div>
   {% endfor %}
