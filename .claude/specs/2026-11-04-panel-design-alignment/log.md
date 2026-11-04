@@ -20,3 +20,6 @@ reviewer: APPROVE — PNS-1..3 implemented and tested; INV-1 holds (every header
 Low fixed: the header context processor keys on the `panel` URL namespace, not a hardcoded path. Low accepted: the open-MR count is queried again on My MRs (one indexed COUNT).
 Intended differences from the mockup: 38 px buttons (one control height), "Done" uses the primary button, My reviews keeps its divider (developer decision).
 Gate A after the fix: tests PASS (99 passed) · pylint 10.00 · isort · black · trace 3/3. Done.
+
+## 2026-11-04 12:52 UTC — spec closed
+Session archived: /home/tabdeal/side-projects/merge-orchestrator/.claude/craft/archive/session-20261104T125219+0000.json
