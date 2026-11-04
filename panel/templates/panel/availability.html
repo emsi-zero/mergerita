@@ -3,30 +3,30 @@
 <div class="page-head">
   <h1>My availability</h1>
 </div>
-<p class="muted lead">Booking only uses days you work, minus leave, up to your daily review budget. Changes apply to new bookings; existing ones stay.</p>
+<p class="muted lead">Booking only uses days you work, minus leave, up to your daily review budget. Changes save as you make them and apply to new bookings; existing ones stay.</p>
 <div class="columns">
   <section class="card">
-    <form method="post" action="{% url 'panel:availability-days' %}">
+    <form method="post" action="{% url 'panel:availability-days' %}" data-autosave>
       {% csrf_token %}
-      <h2>Working days</h2>
+      <div class="form-head"><h2>Working days</h2><span class="save-status small" role="status" aria-live="polite"></span></div>
       <div class="muted small hint">Team default: {{ default_days }}</div>
       {{ days_form.non_field_errors }}
       {{ days_form.days.errors }}
       <div class="pills">
         {% for choice in days_form.days %}<label class="pill">{{ choice.tag }}<span>{{ choice.choice_label }}</span></label>{% endfor %}
       </div>
-      <button type="submit" class="btn btn-primary">Save working days</button>
+      <button type="submit" class="btn btn-primary" data-autosave-fallback>Save working days</button>
     </form>
 
-    <form method="post" action="{% url 'panel:availability-budget' %}">
+    <form method="post" action="{% url 'panel:availability-budget' %}" data-autosave>
       {% csrf_token %}
-      <h2>Daily review budget</h2>
+      <div class="form-head"><h2>Daily review budget</h2><span class="save-status small" role="status" aria-live="polite"></span></div>
       <div class="muted small hint">Organisation default {{ default_budget }} min</div>
       {{ budget_form.minutes.errors }}
       <div class="pills">
         {% for choice in budget_form.minutes %}<label class="pill">{{ choice.tag }}<span>{{ choice.choice_label }}</span></label>{% endfor %}
       </div>
-      <button type="submit" class="btn btn-primary">Save budget</button>
+      <button type="submit" class="btn btn-primary" data-autosave-fallback>Save budget</button>
     </form>
   </section>
 
@@ -58,3 +58,4 @@
   </section>
 </div>
 {% endblock %}
+{% block scripts %}{% load static %}<script src="{% static 'panel/autosave.js' %}" defer></script>{% endblock %}

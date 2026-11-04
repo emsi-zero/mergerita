@@ -40,6 +40,7 @@ h2 { margin: 0; font-size: 16px; font-weight: 700; }
 h3 { margin: 22px 0 10px; font-size: 13px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
 main { max-width: 1240px; margin: 0 auto; padding: 24px; }
 :focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+[hidden] { display: none !important; }
 
 /* Header */
 .top { background: var(--surface); border-bottom: 1px solid var(--border); }
@@ -160,7 +161,10 @@ main { max-width: 1240px; margin: 0 auto; padding: 24px; }
 .review .grow-end::after { content: "\2197"; font-size: 13px; color: var(--muted); }
 .review .grow-end:hover { border-color: var(--primary-border); background: var(--warn-bg); color: var(--text); }
 
-/* Availability */
+/* Availability. Working days and budget save on change (autosave.js). */
+.form-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.save-status { color: var(--ok-fg); }
+.save-status.is-error { color: var(--bad-fg); }
 .hint { margin-top: 4px; }
 .columns form + form { margin-top: 24px; }
 .columns form .btn { margin-top: 14px; }

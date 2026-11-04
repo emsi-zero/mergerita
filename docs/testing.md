@@ -240,7 +240,7 @@ This raises `AuditImmutableError`.
 3. Check the three tabs:
    - *My MRs*: only MRs the Person authored. Open one to see area reviews, the next step, and the history.
    - *My reviews*: bookings from today to the booking horizon, grouped by day with booked minutes over budget.
-   - *Availability*: save working days (at least one), a budget (60, 120, 180 or 240), and add or remove leave. After each save, open *Audit events* in the admin. There is one event with your user, the action, and the before and after values.
+   - *Availability*: tick working days and pick a budget (60, 120, 180 or 240); each change saves by itself and shows "Saved" next to the heading (unticking every day shows "Select at least one working day."). Add or remove leave with its buttons. With scripts off, the Save buttons come back. After each save, open *Audit events* in the admin. There is one event with your user, the action, and the before and after values.
 4. Change the id in `/panel/mrs/<id>/` to an MR of another author. It must return 404.
 
 ### M. Go to MR and author presence (MRV)
