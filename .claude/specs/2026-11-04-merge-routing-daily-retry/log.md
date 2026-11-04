@@ -29,3 +29,6 @@ Re-review of the delta: deep-reviewer (High confirmed in round 1).
 deep-reviewer: APPROVE — the High is fixed (new snapshot after the MR lock; every writer takes the MR lock first); the broad except is outside the atomic block and logs every failure; the MRDR-5 test waits on the lock and its assigned case separates old and new code.
 Accepted Low: the error handler's MR read can raise only on a lost DB connection; the day is then already claimed and only that run's audit row is lost.
 Gate B: green. Done.
+
+## 2026-11-04 12:28 UTC — spec closed
+Session archived: /home/tabdeal/side-projects/merge-orchestrator/.claude/craft/archive/session-20261104T122822+0000.json
