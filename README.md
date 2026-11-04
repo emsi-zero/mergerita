@@ -82,4 +82,16 @@ Developers sign in at `/panel/login/` and use `/panel/`. The panel and the admin
 
 `PANEL_AUTH_MODES` is a comma-separated list of `local` (username and password) and `sso` (GitLab); the default is `local,sso`. An empty or unknown value stops the application at start. The GitLab sign-in is a stub for now: its pages reply "GitLab sign-in is not set up yet" and sign no one in. With `sso` alone, nobody can sign in to the panel.
 
-The panel has three tabs: My MRs, My reviews and Availability. In Availability a developer sets working days, a daily budget (60, 120, 180 or 240 minutes) and leave. Each change writes one audit event. See `docs/testing.md` (scenario L) for how to check it.
+The panel has three tabs for developers: My MRs, My reviews and Availability, and a fourth, My merges, for merge owners only. In Availability a developer sets working days, a daily budget (60, 120, 180 or 240 minutes) and leave. Each change writes one audit event. See `docs/testing.md` (scenario L) for how to check it.
+
+## Merge owners
+
+An approved MR is given to a merge owner and a merge window. People still merge in GitLab: the orchestrator does not merge, and it detects each merge (by the Merge Request Hook, or by reconciliation when the hook is lost). It records who merged and when, and it alerts the admins when the author or an approver merged, or when an MR was merged before approval. A merge outside its window, or by someone other than the assigned merge owner, is recorded without an alert.
+
+Set it up in the admin:
+
+1. In *Persons*, tick *Is merge owner* for each person who may merge. Set *Merge times* to a comma-separated list of `HH:MM` times in the app's time zone (`Asia/Tehran`), for example `10:00, 15:00`. Set *Daily merge limit* to override the default, or leave it empty. A limit of 0 means the person takes no merges.
+2. In *Merge routing settings*, set the default daily merge limit (5) and the merge window length in minutes (30). Merge owners can merge any area.
+3. A merge owner sees the assigned MRs on *My merges* (`/panel/merges/`) and gets a chat message for each. When an approval is revoked before the merge, the assignment is cancelled and the merge owner is told.
+
+To try it with the mock GitLab: `scripts/gitlab-mock merge PROJECT_ID IID USER_ID` sets the MR to merged by that user and sends the hook. Scenario O in `docs/testing.md` has the full steps.

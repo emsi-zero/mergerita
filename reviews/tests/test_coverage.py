@@ -13,6 +13,7 @@ from reviews.models import (
     AreaReview,
     AreaReviewState,
     CodeArea,
+    MergeAssignment,
     MergeRequest,
     MergeRequestState,
     OwnerRole,
@@ -507,3 +508,88 @@ class CoverageTest(TestCase):
                     ).count(),
                     1,
                 )
+
+    def test_mrg_11_lost_approval_returns_the_mr_and_cancels_the_merge(self) -> None:
+        """MRG-11: Given an approved MR with an open merge assignment, when a
+        hook arrives, then a coverage check is queued; and when an area review
+        has lost its fresh approval, then the MR returns to review with the
+        follow-up of RVO-7, the assignment is cancelled and the merge owner is
+        told; and when the MR is merged, then no check is queued."""
+        # given
+        merge_request = self.create_merge_request(20, MergeRequestState.APPROVED)
+        lost = self.book_reviewer(merge_request, 401, AreaReviewState.APPROVED)
+        self.seed_verdict(20, 401, "reviewed", -1)
+        merge_owner = Person.objects.create(
+            gitlab_user_id=402,
+            name="Merge owner",
+            is_merge_owner=True,
+            merge_times=["10:00"],
+            working_days=EVERY_DAY,
+        )
+        assignment = MergeAssignment.objects.create(
+            merge_request=merge_request,
+            merge_owner=merge_owner,
+            window=hours_from_now(2),
+        )
+        hook = InboxEvent(
+            source="webhook",
+            event_kind="Merge Request Hook",
+            payload={
+                "user": {"id": 11},
+                "project": {"id": 7},
+                "object_attributes": {"iid": 20, "action": "approval"},
+            },
+        )
+
+        # when
+        handle_event(hook)
+        queued = OutboxCall.objects.filter(kind="check_coverage").count()
+        coverage.check_coverage({"merge_request_id": merge_request.pk})
+
+        # then
+        merge_request.refresh_from_db()
+        assignment.refresh_from_db()
+        lost.refresh_from_db()
+        self.assertEqual(queued, 1)
+        self.assertEqual(merge_request.state, IN_REVIEW)
+        self.assertEqual(lost.state, AreaReviewState.BOOKED)
+        self.assertIsNotNone(assignment.cancelled_at)
+        self.assertTrue(AuditEvent.objects.filter(action="merge.cancelled").exists())
+        self.assert_follow_up(lost, 401, 20)
+        self.assertEqual(
+            OutboxCall.objects.filter(
+                kind="notify",
+                payload__gitlab_user_ids=[402],
+                payload__text__startswith="Do not merge !20 ",
+            ).count(),
+            1,
+        )
+
+        with self.subTest("a later approval assigns again"):
+            # given
+            self.seed_verdict(20, 401, "approved", 1)
+
+            # when
+            coverage.check_coverage({"merge_request_id": merge_request.pk})
+
+            # then
+            merge_request.refresh_from_db()
+            assignments = merge_request.merge_assignments
+            self.assertEqual(merge_request.state, MergeRequestState.APPROVED)
+            self.assertEqual(assignments.filter(cancelled_at__isnull=False).count(), 1)
+            self.assertEqual(assignments.filter(cancelled_at__isnull=True).count(), 1)
+
+        with self.subTest("merged MR is not checked"):
+            # given
+            merged = self.create_merge_request(21, MergeRequestState.MERGED)
+            hook.payload["object_attributes"]["iid"] = 21
+
+            # when
+            handle_event(hook)
+
+            # then
+            self.assertFalse(
+                OutboxCall.objects.filter(
+                    kind="check_coverage", payload={"merge_request_id": merged.pk}
+                ).exists()
+            )

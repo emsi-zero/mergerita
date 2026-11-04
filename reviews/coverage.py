@@ -11,6 +11,7 @@ from integrations.adapters import GitLabGatewayInterface, get_gitlab_gateway
 from reviews import booking, merge_router
 from reviews.ai_gate import APPROVED_STATE, REQUESTED_CHANGES_STATE
 from reviews.alerts import queue_notification
+from reviews.lifecycle import COVERAGE_STATES
 from reviews.models import (
     AreaReview,
     AreaReviewState,
@@ -18,8 +19,6 @@ from reviews.models import (
     MergeRequestState,
     ReviewSessionOutcome,
 )
-
-COVERAGE_STATES = (MergeRequestState.IN_REVIEW, MergeRequestState.WAITING_ON_AUTHOR)
 
 
 class Verdict(NamedTuple):
@@ -83,13 +82,15 @@ def check_coverage(payload: dict) -> None:
 
     First read the verdicts of the booked and approved area reviews, with no
     transaction open (INV-3). Then lock the MR, the booking lock and the area
-    reviews, in that order (INV-6), and act only while the MR is in review, or
-    waiting on the author after a reviewer's change request that this reviewer
-    has since approved. A verdict counts when it is newer than the MR's latest
-    push. A fresh `approved` approves a booked area review. An approved area
-    review without a fresh `approved` goes back to booked and gets a follow-up.
-    A fresh `requested_changes` returns the MR to its author. An area review
-    whose reviewer changed since the read is skipped.
+    reviews, in that order (INV-6), and act only while the MR is in review,
+    approved, or waiting on the author after a reviewer's change request that
+    this reviewer has since approved. An approved MR whose area review lost its
+    approval returns to review and its merge assignment is cancelled. A
+    verdict counts when it is newer than the MR's latest push. A fresh
+    `approved` approves a booked area review. An approved area review without
+    a fresh `approved` goes back to booked and gets a follow-up. A fresh
+    `requested_changes` returns the MR to its author. An area review whose
+    reviewer changed since the read is skipped.
     """
     merge_request_id = payload["merge_request_id"]
     verdicts = read_verdicts(
@@ -222,10 +223,28 @@ def _apply_verdicts(
         elif area_review.state == AreaReviewState.APPROVED and not is_approved:
             reset_approval(area_review)
             booking.book_follow_up(area_review)
-    if area_reviews and all(
+    all_approved = all(
         review.state == AreaReviewState.APPROVED for review in area_reviews
-    ):
+    )
+    if merge_request.state == MergeRequestState.APPROVED:
+        if not all_approved:
+            _revoke_approval(merge_request)
+    elif area_reviews and all_approved:
         _approve(merge_request)
+
+
+def _revoke_approval(merge_request: MergeRequest) -> None:
+    """Send an approved MR back to review and cancel its merge assignment (MRG-11)."""
+    merge_request.state = MergeRequestState.IN_REVIEW
+    merge_request.save(update_fields=["state"])
+    record(
+        "gitlab",
+        "mr.in_review",
+        merge_request,
+        {"state": MergeRequestState.APPROVED},
+        {"state": merge_request.state},
+    )
+    merge_router.cancel_open_assignment(merge_request, "an approval was revoked")
 
 
 def reset_approval(area_review: AreaReview) -> None:

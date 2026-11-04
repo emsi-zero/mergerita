@@ -29,6 +29,15 @@ class MergeRequestSummary:
 
 
 @dataclass(frozen=True)
+class MergeRequestStatus:
+    """The state of one merge request, and who merged it and when once merged."""
+
+    state: str
+    merged_by_id: int | None
+    merged_at: datetime | None
+
+
+@dataclass(frozen=True)
 class MergeRequestPage:
     """One page of open merge requests. `next_page` is None on the last page."""
 
@@ -64,6 +73,8 @@ class GitLabGatewayInterface(Protocol):
     def list_open_merge_requests(
         self, project_id: int, updated_after: str | None, page: int
     ) -> MergeRequestPage: ...
+
+    def get_merge_request(self, project_id: int, iid: int) -> MergeRequestStatus: ...
 
     def post_note(self, project_id: int, iid: int, body: str) -> None: ...
 

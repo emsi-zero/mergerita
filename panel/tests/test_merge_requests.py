@@ -127,6 +127,46 @@ class MergeRequestPanelTests(TestCase):
         self.assertNotContains(response, "Area review created")
         self.assertEqual(other_response.status_code, 404)
 
+    def test_history_labels_a_merge_outside_its_window_or_without_an_owner(self):
+        """Given my merged MRs, when I open them, then the history says whether
+        the merge was outside its window, by another person than the merge
+        owner, or had no merge owner assigned."""
+        for iid, name, flags, label in (
+            (1, "clean", (False, False, 5), "Merged"),
+            (2, "outside", (True, False, 5), "Merged (outside its window)"),
+            (
+                3,
+                "other",
+                (False, True, 5),
+                "Merged (not by the assigned merge owner)",
+            ),
+            (4, "no_owner", (False, False, None), "Merged (no merge owner assigned)"),
+        ):
+            with self.subTest(name):
+                # given
+                merged = create_merge_request(
+                    self.me, iid, name, MergeRequestState.MERGED
+                )
+                AuditEvent.objects.create(
+                    actor="gitlab",
+                    action="mr.merged",
+                    subject_type="reviews.MergeRequest",
+                    subject_id=str(merged.pk),
+                    after={
+                        "outside_window": flags[0],
+                        "by_other_person": flags[1],
+                        "merge_owner": flags[2],
+                    },
+                )
+
+                # when
+                response = self.client.get(f"/panel/mrs/{merged.pk}/")
+
+                # then
+                self.assertEqual(
+                    [text for _, text in response.context["history"]], [label]
+                )
+
     def test_dvp_5_detail_warns_when_size_exceeds_an_area_limit(self):
         """DVP-5: Given an MR over an area's limit,
         when I open it, then a size warning shows; at the limit it does not.

@@ -45,6 +45,7 @@ STATE_BADGES = {
     MergeRequestState.WAITING_ON_AUTHOR: ("Your move", "author"),
     MergeRequestState.NEEDS_TRIAGE: ("Needs triage", "triage"),
     MergeRequestState.APPROVED: ("Approved", "review"),
+    MergeRequestState.MERGED: ("Merged", "review"),
 }
 
 STATE_SUMMARIES = {
@@ -54,6 +55,7 @@ STATE_SUMMARIES = {
     MergeRequestState.WAITING_ON_AUTHOR: "AI Reviewer requested changes",
     MergeRequestState.NEEDS_TRIAGE: "Files outside any code area",
     MergeRequestState.APPROVED: "All areas approved",
+    MergeRequestState.MERGED: "Merged",
 }
 
 # Title and text of the next step for the author, per MR state.
@@ -86,6 +88,7 @@ NEXT_STEPS = {
         "Nothing to do",
         "All areas approved. Waiting for merge routing.",
     ),
+    MergeRequestState.MERGED: ("Nothing to do", "The MR is merged."),
 }
 
 ACTION_LABELS = {
@@ -99,6 +102,9 @@ ACTION_LABELS = {
     "area_review.approval_reset": "Area approval lost",
     "mr.changes_requested": "Reviewer requested changes",
     "mr.approved": "Approved",
+    "mr.merged": "Merged",
+    "merge.assigned": "Merge owner assigned",
+    "merge.cancelled": "Merge assignment cancelled",
 }
 
 
@@ -547,7 +553,26 @@ def _history(
             subject_id__in=[str(review.pk) for review in area_reviews],
         )
     ).order_by("created_at", "pk")
-    return [
-        (event.created_at, ACTION_LABELS.get(event.action, event.action))
-        for event in events
+    return [(event.created_at, _history_label(event)) for event in events]
+
+
+def _history_label(event: AuditEvent) -> str:
+    """Return the label of an audit event.
+
+    A merge names what is odd about it (MRG-8): outside its window, by another
+    person than the merge owner, or with no merge owner assigned.
+    """
+    label = ACTION_LABELS.get(event.action, event.action)
+    if event.action != "mr.merged":
+        return label
+    after = event.after
+    notes = [
+        text
+        for flag, text in (
+            (after["outside_window"], "outside its window"),
+            (after["by_other_person"], "not by the assigned merge owner"),
+            (after["merge_owner"] is None, "no merge owner assigned"),
+        )
+        if flag
     ]
+    return f"{label} ({', '.join(notes)})" if notes else label

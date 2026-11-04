@@ -159,6 +159,9 @@ class MockState:  # pylint: disable=too-many-instance-attributes
             "sha": mr["sha"],
             "web_url": self.web_url(base_url, mr),
             "labels": [],
+            "merged_by": _user_dict(mr["merged_by"]) if mr.get("merged_by") else None,
+            "merge_user": _user_dict(mr["merged_by"]) if mr.get("merged_by") else None,
+            "merged_at": mr.get("merged_at"),
         }
 
     def reviewers_json(self, mr: dict[str, Any]) -> list[dict[str, Any]]:
@@ -481,6 +484,22 @@ def _activity_router(state: MockState) -> APIRouter:
                 mr["diffs"] = body["diffs"]
             state.touch(mr)
             payload = state.mr_hook(mr, "update", mr["author"], oldrev=oldrev)
+            result = state.mr_json(mr, state.public_url)
+        state.send_webhook("Merge Request Hook", payload)
+        return result
+
+    @router.post("/mrs/{project_id}/{iid}/merge")
+    def control_merge(
+        project_id: int, iid: int, body: dict[str, Any] = Body(...)
+    ) -> dict[str, Any]:
+        mr = state.mr(project_id, iid)
+        with state.lock:
+            actor = state.user(body["user_id"])
+            state.touch(mr)
+            mr["state"] = "merged"
+            mr["merged_by"] = actor
+            mr["merged_at"] = mr["updated_at"]
+            payload = state.mr_hook(mr, "merge", actor, merged_at=mr["merged_at"])
             result = state.mr_json(mr, state.public_url)
         state.send_webhook("Merge Request Hook", payload)
         return result

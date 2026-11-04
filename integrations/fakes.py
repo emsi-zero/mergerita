@@ -1,9 +1,9 @@
 from datetime import datetime
 
-from integrations.adapters import Changes, MergeRequestPage
+from integrations.adapters import Changes, MergeRequestPage, MergeRequestStatus
 
 
-class FakeGitLabGateway:
+class FakeGitLabGateway:  # pylint: disable=too-many-instance-attributes
     """In-memory gateway. It records calls and returns seeded changes."""
 
     def __init__(self) -> None:
@@ -13,6 +13,7 @@ class FakeGitLabGateway:
         self.latest_comment_times: dict[tuple[int, int, int], datetime] = {}
         self.version_times: dict[tuple[int, int, str], datetime] = {}
         self.open_merge_requests: dict[int, MergeRequestPage] = {}
+        self.merge_request_statuses: dict[tuple[int, int], MergeRequestStatus] = {}
         self.calls: list[tuple] = []
 
     def get_changes(self, project_id: int, iid: int) -> Changes:
@@ -45,6 +46,11 @@ class FakeGitLabGateway:
         self, project_id: int, updated_after: str | None, page: int
     ) -> MergeRequestPage:
         return self.open_merge_requests.get(project_id, MergeRequestPage([], None))
+
+    def get_merge_request(self, project_id: int, iid: int) -> MergeRequestStatus:
+        return self.merge_request_statuses.get(
+            (project_id, iid), MergeRequestStatus("opened", None, None)
+        )
 
     def post_note(self, project_id: int, iid: int, body: str) -> None:
         self.calls.append(("post_note", project_id, iid, body))

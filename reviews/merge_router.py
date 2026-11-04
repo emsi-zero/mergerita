@@ -88,6 +88,38 @@ def assign_merge(merge_request: MergeRequest) -> MergeAssignment | None:
     return assignment
 
 
+def cancel_open_assignment(merge_request: MergeRequest, reason: str) -> None:
+    """Cancel the MR's open assignment, if any, and tell its merge owner (MRG-11).
+
+    The caller owns the transaction and holds the MR lock.
+    """
+    assignment = (
+        MergeAssignment.objects.select_related("merge_owner")
+        .filter(
+            merge_request=merge_request,
+            merged_at__isnull=True,
+            cancelled_at__isnull=True,
+        )
+        .first()
+    )
+    if assignment is None:
+        return
+    assignment.cancelled_at = timezone.now()
+    assignment.save(update_fields=["cancelled_at"])
+    record(
+        "orchestrator",
+        "merge.cancelled",
+        assignment,
+        {"merge_owner": assignment.merge_owner_id},
+        {"cancelled_at": assignment.cancelled_at.isoformat(), "reason": reason},
+    )
+    if assignment.merge_owner is not None:
+        queue_notification(
+            [assignment.merge_owner.gitlab_user_id],
+            f"Do not merge !{merge_request.iid} {merge_request.title}: {reason}.",
+        )
+
+
 def _best_fit(
     candidates: list[Person], now: datetime
 ) -> tuple[Person, datetime, int, int] | None:

@@ -330,3 +330,12 @@ class MergeAssignment(models.Model):
         db_default=MergeViolation.NONE,
     )
     cancelled_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["merge_request"],
+                condition=models.Q(merged_at__isnull=True, cancelled_at__isnull=True),
+                name="merge_assignment_one_open",
+            )
+        ]

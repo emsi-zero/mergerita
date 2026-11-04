@@ -9,6 +9,7 @@
   scripts/gitlab-mock assign PROJECT_ID IID USER_ID
   scripts/gitlab-mock approve PROJECT_ID IID USER_ID
   scripts/gitlab-mock request-changes PROJECT_ID IID USER_ID
+  scripts/gitlab-mock merge PROJECT_ID IID USER_ID
   scripts/gitlab-mock push PROJECT_ID IID
   scripts/gitlab-mock note PROJECT_ID IID USER_ID TEXT
   scripts/gitlab-mock state
@@ -78,7 +79,7 @@ def _build_parser() -> argparse.ArgumentParser:
     open_.add_argument("--too-large", action="append", default=[], metavar="PATH")
     open_.add_argument("--reviewer", type=int, action="append", default=[])
 
-    for name in ("approve", "request-changes", "assign"):
+    for name in ("approve", "request-changes", "assign", "merge"):
         review = sub.add_parser(name)
         review.add_argument("project_id", type=int)
         review.add_argument("iid", type=int)
@@ -127,6 +128,8 @@ def _request(args: argparse.Namespace) -> tuple[str, dict[str, Any]]:
         return f"{mr_path}/reviewers/{args.user_id}/state", {"state": state}
     if command == "assign":
         return f"{mr_path}/reviewers", {"user_id": args.user_id}
+    if command == "merge":
+        return f"{mr_path}/merge", {"user_id": args.user_id}
     if command == "push":
         return f"{mr_path}/push", {}
     if command == "note":

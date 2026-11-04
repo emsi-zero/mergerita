@@ -274,3 +274,67 @@ class GitLabRestGatewayTest(SimpleTestCase):
                 # when / then
                 with self.assertRaisesMessage(GitLabError, "deadline"):
                     gateway.get_changes(7, 1)
+
+    def test_get_merge_request_reads_the_merger_and_rejects_malformed_bodies(
+        self,
+    ) -> None:
+        """Given MR bodies from GitLab, when the merge is read, then the merger
+        is `merge_user`, else `merged_by`, else none, and a body without a
+        state or without JSON raises GitLabError."""
+        merged_at = "2026-11-04T06:40:00.000Z"
+        merged = {"state": "merged", "merged_at": merged_at}
+        for name, response, expected in (
+            (
+                "merge_user_first",
+                httpx.Response(
+                    200,
+                    json={**merged, "merge_user": {"id": 5}, "merged_by": {"id": 6}},
+                ),
+                5,
+            ),
+            (
+                "merged_by_only",
+                httpx.Response(200, json={**merged, "merged_by": {"id": 6}}),
+                6,
+            ),
+            ("neither", httpx.Response(200, json=merged), None),
+        ):
+            with self.subTest(name):
+                # given
+                with (
+                    respx.mock(base_url="https://gitlab.test/api/v4") as router,
+                    override_settings(
+                        GITLAB_URL="https://gitlab.test", GITLAB_TOKEN=TOKEN
+                    ),
+                ):
+                    router.get("/projects/7/merge_requests/1").mock(
+                        return_value=response
+                    )
+
+                    # when
+                    status = GitLabRestGateway().get_merge_request(7, 1)
+
+                # then
+                self.assertEqual(status.merged_by_id, expected)
+                self.assertEqual(
+                    status.merged_at, datetime(2026, 11, 4, 6, 40, tzinfo=UTC)
+                )
+        for name, response in (
+            ("missing_state", httpx.Response(200, json={"merged_at": merged_at})),
+            ("not_json", httpx.Response(200, text="<html>")),
+        ):
+            with self.subTest(name):
+                # given
+                with (
+                    respx.mock(base_url="https://gitlab.test/api/v4") as router,
+                    override_settings(
+                        GITLAB_URL="https://gitlab.test", GITLAB_TOKEN=TOKEN
+                    ),
+                ):
+                    router.get("/projects/7/merge_requests/1").mock(
+                        return_value=response
+                    )
+
+                    # when / then
+                    with self.assertRaises(GitLabError):
+                        GitLabRestGateway().get_merge_request(7, 1)

@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from django.conf import settings
 from django.db import connection, transaction
 
+from integrations import outbox
 from integrations.adapters import (
     GitLabGatewayInterface,
     MergeRequestSummary,
@@ -11,8 +12,9 @@ from integrations.adapters import (
 )
 from integrations.gitlab import PER_PAGE, GitLabError
 from integrations.inbox import store_event
+from integrations.models import OutboxCall, OutboxStatus
 from reviews.lifecycle import MERGE_REQUEST_EVENT, RECONCILE_SOURCE, parse_gitlab_time
-from reviews.models import MergeRequest, ReconcileCursor
+from reviews.models import MergeRequest, MergeRequestState, ReconcileCursor
 
 logger = logging.getLogger(__name__)
 
@@ -40,10 +42,15 @@ def reconcile_all() -> None:
             return
         try:
             for project_id in settings.RMO_GITLAB_PROJECT_IDS:
-                try:
-                    _reconcile_project(project_id)
-                except Exception:  # pylint: disable=broad-exception-caught
-                    logger.exception("reconcile of project %s failed", project_id)
+                for step in (_reconcile_project, _reconcile_merges):
+                    try:
+                        step(project_id)
+                    except Exception:  # pylint: disable=broad-exception-caught
+                        logger.exception(
+                            "reconcile %s of project %s failed",
+                            step.__name__,
+                            project_id,
+                        )
         finally:
             cursor.execute("SELECT pg_advisory_unlock(%s)", [RECONCILE_LOCK_KEY])
 
@@ -89,6 +96,71 @@ def _reconcile_project(project_id: int) -> None:
         seen.update((mr.iid, mr.updated_at) for mr in new)
         if result.next_page is None:
             return
+
+
+def _reconcile_merges(project_id: int) -> None:
+    """Store a `merged` event for each MR held as approved that GitLab shows merged (MRG-9).
+
+    GitLab is read here, outside the inbox transaction (INV-4). An MR whose
+    read fails, for any reason, is logged and skipped, so one bad MR does not hide the others.
+    """
+    gateway = get_gitlab_gateway()
+    merged = []
+    for iid in MergeRequest.objects.filter(
+        project_id=project_id, state=MergeRequestState.APPROVED
+    ).values_list("iid", flat=True):
+        try:
+            status = gateway.get_merge_request(project_id, iid)
+        except Exception as error:  # pylint: disable=broad-exception-caught
+            # Log the MR and the error type only: nothing from the request.
+            logger.error(
+                "merge check of MR %s:%s failed: %s",
+                project_id,
+                iid,
+                type(error).__name__,
+            )
+            continue
+        if status.state == "merged":
+            merged.append((iid, status))
+    with transaction.atomic():
+        for iid, status in merged:
+            merged_at = status.merged_at.isoformat() if status.merged_at else None
+            stored = store_event(
+                RECONCILE_SOURCE,
+                f"{project_id}:{iid}:merged:{merged_at}",
+                MERGE_REQUEST_EVENT,
+                f"{project_id}:{iid}",
+                {
+                    "project": {"id": project_id},
+                    "object_attributes": {
+                        "iid": iid,
+                        "action": "merged",
+                        "merged_at": merged_at,
+                    },
+                },
+            )
+            if not stored:
+                _requeue_confirmation(project_id, iid)
+
+
+def _requeue_confirmation(project_id: int, iid: int) -> None:
+    """Queue `confirm_merge` again when the stored event's job is gone and the MR is approved.
+
+    The inbox key of a merge is stable, so a repeat reconciliation stores
+    nothing. A job that ended FAILED would never run again without this.
+    """
+    merge_request = MergeRequest.objects.filter(
+        project_id=project_id, iid=iid, state=MergeRequestState.APPROVED
+    ).first()
+    if merge_request is None:
+        return
+    payload = {"merge_request_id": merge_request.pk}
+    if not OutboxCall.objects.filter(
+        kind="confirm_merge",
+        payload=payload,
+        status__in=(OutboxStatus.PENDING, OutboxStatus.IN_FLIGHT),
+    ).exists():
+        outbox.enqueue("confirm_merge", payload)
 
 
 def _payloads(

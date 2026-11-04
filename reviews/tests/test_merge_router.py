@@ -76,10 +76,13 @@ class MergeRouterTest(TestCase):
         Leave.objects.create(
             person=on_leave, start_date=NOW.date(), end_date=NOW.date() + timedelta(1)
         )
-        other = create_merge_request(author, 1, MergeRequestState.IN_REVIEW)
-        for person in (full, busy):
+        for iid, person in ((1, full), (3, busy)):
             MergeAssignment.objects.create(
-                merge_request=other, merge_owner=person, window=window(4, 10)
+                merge_request=create_merge_request(
+                    author, iid, MergeRequestState.IN_REVIEW
+                ),
+                merge_owner=person,
+                window=window(4, 10),
             )
         merge_request = create_merge_request(author, 2, MergeRequestState.IN_REVIEW)
         AreaReview.objects.create(
@@ -122,6 +125,7 @@ class MergeRouterTest(TestCase):
         # more cases, each on a clean slate: owner fields, ids on leave today,
         # existing assignments today, horizon, expected (owner, day, hour)
         plain_author = Person.objects.create(gitlab_user_id=90, name="Plain")
+        plain_request = create_merge_request(plain_author, 99, MergeRequestState.MERGED)
         for name, owners, leave_ids, preload, horizon, expected in (
             (
                 "non_working_day_is_skipped",
@@ -170,9 +174,10 @@ class MergeRouterTest(TestCase):
                 )
                 MergeAssignment.objects.bulk_create(
                     MergeAssignment(
-                        merge_request=other,
+                        merge_request=plain_request,
                         merge_owner=people[pk],
                         window=window(4, 10),
+                        merged_at=window(4, 10),
                     )
                     for pk, count in preload.items()
                     for _ in range(count)

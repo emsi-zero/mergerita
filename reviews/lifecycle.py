@@ -13,6 +13,11 @@ from reviews.models import MergeRequest, MergeRequestState, Person
 MERGE_REQUEST_EVENT = "Merge Request Hook"
 NOTE_EVENT = "Note Hook"
 RECONCILE_SOURCE = "reconcile"
+COVERAGE_STATES = (
+    MergeRequestState.IN_REVIEW,
+    MergeRequestState.WAITING_ON_AUTHOR,
+    MergeRequestState.APPROVED,
+)
 AI_GATE_OPEN_STATES = (
     MergeRequestState.AWAITING_AI_REVIEW,
     MergeRequestState.WAITING_ON_AUTHOR,
@@ -69,6 +74,12 @@ def handle_event(event: InboxEvent) -> None:
             if event.source == RECONCILE_SOURCE:
                 _reconcile_merge_request(event, project_id, attributes)
                 _queue_coverage_check(project_id, attributes["iid"])
+        elif action == "merge":
+            _queue_merge_confirmation(project_id, attributes["iid"])
+        elif action == "merged":
+            # Only the reconciler may send this action; a webhook with it is ignored.
+            if event.source == RECONCILE_SOURCE:
+                _queue_merge_confirmation(project_id, attributes["iid"])
         elif action == "open":
             _open_merge_request(
                 project_id,
@@ -89,6 +100,20 @@ def handle_event(event: InboxEvent) -> None:
         if action != "reconcile":
             _queue_coverage_check(project_id, attributes["iid"])
             _record_web_url(project_id, attributes["iid"], attributes.get("url"))
+
+
+def _queue_merge_confirmation(project_id: int, iid: int) -> None:
+    """Queue the check of a reported merge in GitLab, unless the MR is already merged.
+
+    The payload is not trusted: the job reads who merged, and when, from GitLab.
+    """
+    merge_request = (
+        MergeRequest.objects.filter(project_id=project_id, iid=iid)
+        .exclude(state=MergeRequestState.MERGED)
+        .first()
+    )
+    if merge_request is not None:
+        outbox.enqueue("confirm_merge", {"merge_request_id": merge_request.pk})
 
 
 def _record_web_url(project_id: int, iid: int, value: object) -> None:
@@ -197,11 +222,14 @@ def _queue_ai_review_check(project_id: int, iid: int, include_waiting: bool) -> 
 
 
 def _queue_coverage_check(project_id: int, iid: int) -> None:
-    """Queue one coverage check for an MR in review or waiting on its author (RVO-6)."""
+    """Queue one coverage check for an MR in review, waiting on its author or approved.
+
+    An approved MR is checked too, so a revoked approval is seen (MRG-11).
+    """
     merge_request = MergeRequest.objects.filter(
         project_id=project_id,
         iid=iid,
-        state__in=[MergeRequestState.IN_REVIEW, MergeRequestState.WAITING_ON_AUTHOR],
+        state__in=COVERAGE_STATES,
     ).first()
     if merge_request is not None:
         outbox.enqueue("check_coverage", {"merge_request_id": merge_request.pk})

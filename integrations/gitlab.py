@@ -7,7 +7,12 @@ import httpx
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 
-from integrations.adapters import Changes, MergeRequestPage, MergeRequestSummary
+from integrations.adapters import (
+    Changes,
+    MergeRequestPage,
+    MergeRequestStatus,
+    MergeRequestSummary,
+)
 
 PER_PAGE = 100
 # Texts of the system notes that GitLab writes for a review. The smoke test must
@@ -190,6 +195,25 @@ class GitLabRestGateway:
             ],
             next_page=_next_page(response, page, path),
         )
+
+    def get_merge_request(self, project_id: int, iid: int) -> MergeRequestStatus:
+        """Return the MR's state, and who merged it (`merge_user`, else `merged_by`) and when.
+
+        Raise GitLabError when the body is malformed.
+        """
+        path = f"/projects/{project_id}/merge_requests/{iid}"
+        response = self._request("GET", path, _deadline())
+        try:
+            item = response.json()
+            merger = item.get("merge_user") or item.get("merged_by") or {}
+            merged_at = item.get("merged_at")
+            return MergeRequestStatus(
+                state=item["state"],
+                merged_by_id=merger.get("id"),
+                merged_at=datetime.fromisoformat(merged_at) if merged_at else None,
+            )
+        except (KeyError, TypeError, ValueError, AttributeError):
+            raise GitLabError(f"GET {path} -> malformed body") from None
 
     def post_note(self, project_id: int, iid: int, body: str) -> None:
         """Not implemented: no caller yet."""

@@ -215,6 +215,15 @@
       "approved_by": "developer",
       "note": "",
       "session_id": null
+    },
+    {
+      "kind": "spec",
+      "spec": "2026-11-04-merge-routing",
+      "sha256": "b4dd4c56074a4d4f60a606dee2f16b1f09f6727ba29f42f551d26dbb8c12e64f",
+      "approved_at": "2026-11-04T09:36:12+00:00",
+      "approved_by": "developer",
+      "note": "",
+      "session_id": null
     }
   ]
 }

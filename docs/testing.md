@@ -260,6 +260,16 @@ This raises `AuditImmutableError`.
 4. Follow-up: push to MR 2 and have the AI Reviewer approve again, then run the worker. No area review is created. The `api` area review gets a new pending session, marked "Follow-up", with Sara. A session that was still pending shows the outcome `superseded` and its minutes are free again. An area that GitLab still shows as approved gets no new session.
 5. Done, Need more time and Hand back (scenarios M and the panel): sign in as the booked reviewer and press each button on *My reviews*. Done changes no approval. Need more time books Sara again on the next day that fits. Hand back books another owner of the area.
 
+### O. Merge routing (MRG)
+
+1. In the admin, open *Merge routing settings*. Set the default daily merge limit (5) and the merge window length (30 minutes). A window length of 0 and a time such as `25:00` in a Person are rejected. Make Dana (id 31) a merge owner: tick *Is merge owner*, set *Merge times* to `10:00, 15:00`, and leave the daily limit empty.
+2. Bring MR 1 to `approved` as in scenario N. *Merge assignments* has one open row for Dana, with a window and a reason, and Dana has a `notify` call "Merge !1 ... in your 10:00 window on ...". Without a merge owner, the admin gets the alert "no merge owner fits". Dana sees the MR on *My merges*.
+3. Merge by the right person: `gmock merge 7 1 31`, then run the worker. MR 1 is `merged`. The row has the merger and the time, and *Audit events* has `mr.merged`. A merge outside the window shows `outside_window` in the event; a merge by someone else shows `by_other_person`. Neither sends an alert.
+4. Merge by a violator: repeat with MR 2 and `gmock merge 7 2 21` (Sara, an approver) or the author. The row has `violation` set and the admin gets "Merge violation on MR 7:2 ...: merged by Sara. Role: approver.".
+5. Merge before approval: `gmock merge 7 3 31` on an MR that is still `in_review`. The row has no merge owner and the violation `before_approval`, and the admin gets an alert.
+6. Lost webhook: `gmock webhooks off`, merge an approved MR, run the reconciler. A `reconcile` inbox event with the action `merged` is stored, and handling it records the merge as above.
+7. Revoked approval: with an approved MR, remove an approval in the mock (`gmock request-changes 7 4 21`). After the worker runs, MR 4 is back in `in_review` (or `waiting_on_author`), the assignment has `cancelled_at`, and Dana gets "Do not merge !4 ...". The next approval assigns it again.
+
 ---
 
 ## 5. Reset
@@ -303,5 +313,8 @@ Checks. Mark each one on the real instance; a "no" is a finding to report.
 13. **Note Hook.** A bot comment on an MR sends a Note Hook to the orchestrator (the webhook must include *Comments*).
 14. **MR web address.** A Merge Request Hook carries `object_attributes.url`, and the MR list carries `web_url`. Both are absolute `https` URLs of the MR page. If the hook field has another name, no link shows on *My reviews* until the next reconciliation.
 15. **Chat text is plain.** The real chat adapter must send notification text as plain text, with no markdown, HTML or mention parsing. Presence request notes are typed by developers and go into the text as they are.
+
+16. **Merge hook fields.** Merge an MR in the throw-away project. The Merge Request Hook has `object_attributes.action` = `merge`. The orchestrator does not read the merger from the hook: it queues a `confirm_merge` job, which reads the MR from GitLab.
+17. **`merge_user` and `merged_by`.** `GET /projects/:id/merge_requests/:iid` on that MR has `state` = `merged`, `merged_at`, and `merge_user.id` (the person who merged; the orchestrator reads it first) or `merged_by.id`. Check both on a normal merge and on a "merge when pipeline succeeds" merge. When neither is set, the orchestrator records an unknown merger and alerts the admins that separation of duties was not checked.
 
 With a write token and a throw-away MR, `run_worker --once` can need a second run, because it skips events younger than `RMO_INBOX_CLAIM_GRACE_SECONDS` (2 s). Run it again after a few seconds.
