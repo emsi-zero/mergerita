@@ -197,6 +197,15 @@
       "approved_by": "developer",
       "note": "",
       "session_id": null
+    },
+    {
+      "kind": "spec",
+      "spec": "2026-11-03-review-outcomes-continuity",
+      "sha256": "2694e93d7e120bd49483cc17596d8fccad9a03c20dbbb561a401a280e6026c38",
+      "approved_at": "2026-11-04T08:12:06+00:00",
+      "approved_by": "developer",
+      "note": "",
+      "session_id": null
     }
   ]
 }

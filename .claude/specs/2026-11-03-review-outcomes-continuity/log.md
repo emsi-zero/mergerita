@@ -59,3 +59,12 @@ Four deep-review rounds. Confirmed Highs, each fixed and verified closed by delt
 Accepted / notes: coverage takes the global booking lock on every run (serializes with bookings, by INV-6); the clear-on-push is defence in depth (the resume condition alone blocks P13, tested by P13b); a late distinct older push hook can still reopen the gate (pre-existing).
 Pending documentation delta (developer to approve): Contracts should also list the audit actions `area_review.changes_requested` and `review_session.done`.
 Session 2: done. Project: all sessions done.
+
+## 2026-11-04 — spec delta: Contracts audit actions
+Contracts now list `review_session.done` and `area_review.changes_requested`, which the code already writes. Documentation only. Approved by the developer.
+
+## 2026-11-04 08:12 UTC — spec delta approved
+sha256 2694e93d7e12
+
+## 2026-11-04 08:12 UTC — spec closed
+Session archived: /home/tabdeal/side-projects/merge-orchestrator/.claude/craft/archive/session-20261104T081206+0000.json

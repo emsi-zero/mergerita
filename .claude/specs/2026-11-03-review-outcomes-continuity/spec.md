@@ -52,7 +52,7 @@ Not tested, and why:
 - New field `AreaReview.changes_requested_at` (nullable): the GitLab time of its reviewer's open change request; cleared by a push follow-up or a resume. One `reviews` migration.
 - A follow-up sends one notification to its reviewer.
 - New outbox kind `check_coverage`.
-- New audit events: `area_review.unbooked` (before: reviewer, day; after: none) when a re-booking finds no fit; `area_review.approved` and `area_review.approval_reset` (before/after: state); `review_session.superseded` (after: outcome); `mr.changes_requested` and `mr.approved` (before/after: state).
+- New audit events: `area_review.unbooked` (before: reviewer, day; after: none) when a re-booking finds no fit; `area_review.approved` and `area_review.approval_reset` (before/after: state); `review_session.superseded` and `review_session.done` (after: outcome); `area_review.changes_requested` (after: change-request time); `mr.changes_requested` and `mr.approved` (before/after: state).
 - Follow-up notification to the reviewer: "Follow-up review of !<iid> booked on <day>."
 - New panel form posts: `/panel/sessions/<id>/done/`, `/panel/sessions/<id>/more-time/`, `/panel/sessions/<id>/hand-back/`.
 - `resolve_areas` books follow-ups for an MR that already has area reviews, instead of returning.

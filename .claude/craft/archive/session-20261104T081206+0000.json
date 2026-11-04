@@ -1374,10 +1374,17 @@
       "at": "2026-11-04T08:05:43+00:00",
       "session_id": null,
       "label": "trace"
+    },
+    {
+      "command": "craft-spec trace",
+      "exit_code": 0,
+      "at": "2026-11-04T08:12:06+00:00",
+      "session_id": null,
+      "label": "trace"
     }
   ],
   "route": "project",
   "checkpoint_command": "scripts/test.sh -q",
   "spec": "2026-11-03-review-outcomes-continuity",
-  "updated_at": "2026-11-04T08:05:43+00:00"
+  "updated_at": "2026-11-04T08:12:06+00:00"
 }
