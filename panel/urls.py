@@ -42,6 +42,7 @@ urlpatterns = [
         views.SessionHandBackView.as_view(),
         name="session-hand-back",
     ),
+    path("merges/", views.MyMergesView.as_view(), name="merges"),
     path("availability/", views.AvailabilityView.as_view(), name="availability"),
     path(
         "availability/days/", views.WorkingDaysView.as_view(), name="availability-days"

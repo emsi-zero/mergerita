@@ -1,7 +1,24 @@
+import re
+
 from django.conf import settings
+from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator
 from django.db import models
 from django.db.models.functions import Now
 from django.utils import timezone
+
+MERGE_TIME_PATTERN = re.compile(r"([01]\d|2[0-3]):[0-5]\d")
+
+
+def validate_merge_times(value: list) -> None:
+    """Reject an entry that is not a string `HH:MM` from 00:00 to 23:59 (MRG-10)."""
+    bad = [
+        entry
+        for entry in value
+        if not isinstance(entry, str) or not MERGE_TIME_PATTERN.fullmatch(entry)
+    ]
+    if bad:
+        raise ValidationError(f"Not a valid HH:MM time (00:00-23:59): {bad}")
 
 
 def default_working_days() -> list[int]:
@@ -24,6 +41,13 @@ class Person(models.Model):
         db_constraint=False,
         related_name="person",
     )
+    is_merge_owner = models.BooleanField(default=False, db_default=False)
+    # Merge window start times as "HH:MM", in the app's time zone.
+    merge_times = models.JSONField(
+        default=list, db_default=[], blank=True, validators=[validate_merge_times]
+    )
+    # None means the default limit of MergeRoutingSettings.
+    daily_merge_limit = models.PositiveIntegerField(null=True, blank=True)
 
 
 class MergeRequestState(models.TextChoices):  # pylint: disable=too-many-ancestors
@@ -33,6 +57,7 @@ class MergeRequestState(models.TextChoices):  # pylint: disable=too-many-ancesto
     WAITING_ON_AUTHOR = "waiting_on_author"
     NEEDS_TRIAGE = "needs_triage"
     APPROVED = "approved"
+    MERGED = "merged"
 
 
 class MergeRequest(models.Model):
@@ -240,3 +265,68 @@ class CapacityDay(models.Model):
                 fields=["person", "day"], name="capacity_unique_person_day"
             )
         ]
+
+
+class MergeRoutingSettings(models.Model):
+    """The single row of admin-set merge routing values. Use `load()`."""
+
+    default_daily_merge_limit = models.PositiveIntegerField(default=5, db_default=5)
+    merge_window_minutes = models.PositiveIntegerField(
+        default=30, db_default=30, validators=[MinValueValidator(1)]
+    )
+
+    @classmethod
+    def load(cls) -> "MergeRoutingSettings":
+        """Return the single settings row, creating it when it is missing."""
+        return cls.objects.get_or_create(pk=1)[0]
+
+
+class MergeViolation(models.TextChoices):  # pylint: disable=too-many-ancestors
+    NONE = "none"
+    AUTHOR = "author"
+    APPROVER = "approver"
+    BEFORE_APPROVAL = "before_approval"
+
+
+class MergeAssignment(models.Model):
+    """One MR given to a merge owner for a window, and later its recorded merge.
+
+    It is open while it has neither `merged_at` nor `cancelled_at`.
+    """
+
+    merge_request = models.ForeignKey(
+        MergeRequest,
+        on_delete=models.DO_NOTHING,
+        db_constraint=False,
+        related_name="merge_assignments",
+    )
+    merge_owner = models.ForeignKey(
+        Person,
+        on_delete=models.DO_NOTHING,
+        db_constraint=False,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    window = models.DateTimeField(null=True, blank=True)
+    reason = models.TextField(blank=True, default="", db_default="")
+    assigned_at = models.DateTimeField(default=timezone.now, db_default=Now())
+    merged_by = models.ForeignKey(
+        Person,
+        on_delete=models.DO_NOTHING,
+        db_constraint=False,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    merged_by_gitlab_id = models.BigIntegerField(null=True, blank=True)
+    merged_at = models.DateTimeField(null=True, blank=True)
+    outside_window = models.BooleanField(default=False, db_default=False)
+    by_other_person = models.BooleanField(default=False, db_default=False)
+    violation = models.CharField(
+        max_length=16,
+        choices=MergeViolation.choices,
+        default=MergeViolation.NONE,
+        db_default=MergeViolation.NONE,
+    )
+    cancelled_at = models.DateTimeField(null=True, blank=True)

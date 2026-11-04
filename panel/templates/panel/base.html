@@ -21,6 +21,7 @@
       {% with current=request.resolver_match.url_name %}
       <a href="{% url 'panel:mrs' %}" class="tab{% if current == 'mrs' or current == 'mr-detail' %} on{% endif %}">My MRs</a>
       <a href="{% url 'panel:reviews' %}" class="tab{% if current == 'reviews' %} on{% endif %}">My reviews</a>
+      {% if user.person.is_merge_owner %}<a href="{% url 'panel:merges' %}" class="tab{% if current == 'merges' %} on{% endif %}">My merges</a>{% endif %}
       <a href="{% url 'panel:availability' %}" class="tab{% if current|slice:':12' == 'availability' %} on{% endif %}">Availability</a>
       {% endwith %}
     </nav>

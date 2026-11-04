@@ -64,7 +64,7 @@ DATABASES = {
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 USE_TZ = True
-TIME_ZONE = "UTC"
+TIME_ZONE = "Asia/Tehran"
 STATIC_URL = "static/"
 LOGIN_URL = "/panel/login/"
 PANEL_SESSION_COOKIE_NAME = "panel_sessionid"

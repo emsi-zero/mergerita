@@ -1,0 +1,300 @@
+{
+  "started_at": "2026-11-04T08:31:55+00:00",
+  "checks": [
+    {
+      "command": "scripts/test.sh -q",
+      "exit_code": 0,
+      "at": "2026-11-04T08:43:42+00:00",
+      "session_id": null,
+      "label": "tests",
+      "log": ".claude/craft/logs/20261104T084342Z-tests.log"
+    },
+    {
+      "command": ".venv/bin/pylint integrations audit reviews panel gitlab_mock orchestrator manage.py tests_e2e",
+      "exit_code": 8,
+      "at": "2026-11-04T08:44:06+00:00",
+      "session_id": null,
+      "label": "lint",
+      "log": ".claude/craft/logs/20261104T084406Z-lint.log"
+    },
+    {
+      "command": ".venv/bin/isort --check reviews panel orchestrator integrations audit",
+      "exit_code": 0,
+      "at": "2026-11-04T08:44:06+00:00",
+      "session_id": null,
+      "label": "imports",
+      "log": ".claude/craft/logs/20261104T084406Z-imports.log"
+    },
+    {
+      "command": ".venv/bin/black --check .",
+      "exit_code": 0,
+      "at": "2026-11-04T08:44:06+00:00",
+      "session_id": null,
+      "label": "format",
+      "log": ".claude/craft/logs/20261104T084406Z-format.log"
+    },
+    {
+      "command": ".venv/bin/python manage.py makemigrations --check --dry-run",
+      "exit_code": 0,
+      "at": "2026-11-04T08:44:07+00:00",
+      "session_id": null,
+      "label": "migrations",
+      "log": ".claude/craft/logs/20261104T084407Z-migrations.log"
+    },
+    {
+      "command": ".venv/bin/pylint integrations audit reviews panel gitlab_mock orchestrator manage.py tests_e2e",
+      "exit_code": 0,
+      "at": "2026-11-04T08:44:29+00:00",
+      "session_id": null,
+      "label": "lint",
+      "log": ".claude/craft/logs/20261104T084429Z-lint.log"
+    },
+    {
+      "command": "scripts/test.sh -q",
+      "exit_code": 0,
+      "at": "2026-11-04T08:45:06+00:00",
+      "session_id": null,
+      "label": "tests",
+      "log": ".claude/craft/logs/20261104T084506Z-tests.log"
+    },
+    {
+      "command": "scripts/test.sh -q",
+      "exit_code": 0,
+      "at": "2026-11-04T08:45:36+00:00",
+      "session_id": null,
+      "label": "tests",
+      "log": ".claude/craft/logs/20261104T084536Z-tests.log"
+    },
+    {
+      "command": ".venv/bin/isort --check reviews panel orchestrator integrations audit",
+      "exit_code": 0,
+      "at": "2026-11-04T08:45:36+00:00",
+      "session_id": null,
+      "label": "imports",
+      "log": ".claude/craft/logs/20261104T084536Z-imports.log"
+    },
+    {
+      "command": ".venv/bin/black --check .",
+      "exit_code": 0,
+      "at": "2026-11-04T08:45:37+00:00",
+      "session_id": null,
+      "label": "format",
+      "log": ".claude/craft/logs/20261104T084537Z-format.log"
+    },
+    {
+      "command": ".venv/bin/python manage.py makemigrations --check --dry-run",
+      "exit_code": 0,
+      "at": "2026-11-04T08:45:37+00:00",
+      "session_id": null,
+      "label": "migrations",
+      "log": ".claude/craft/logs/20261104T084537Z-migrations.log"
+    },
+    {
+      "command": "craft-spec trace --session 1",
+      "exit_code": 0,
+      "at": "2026-11-04T08:45:37+00:00",
+      "session_id": null,
+      "label": "trace"
+    },
+    {
+      "command": "scripts/test.sh -q",
+      "exit_code": 0,
+      "at": "2026-11-04T08:46:49+00:00",
+      "session_id": null,
+      "label": "tests",
+      "log": ".claude/craft/logs/20261104T084649Z-tests.log"
+    },
+    {
+      "command": "scripts/test.sh -q",
+      "exit_code": 0,
+      "at": "2026-11-04T08:47:19+00:00",
+      "session_id": null,
+      "label": "tests",
+      "log": ".claude/craft/logs/20261104T084719Z-tests.log"
+    },
+    {
+      "command": ".venv/bin/pylint integrations audit reviews panel gitlab_mock orchestrator manage.py tests_e2e",
+      "exit_code": 0,
+      "at": "2026-11-04T08:47:33+00:00",
+      "session_id": null,
+      "label": "lint",
+      "log": ".claude/craft/logs/20261104T084733Z-lint.log"
+    },
+    {
+      "command": ".venv/bin/isort --check . --skip .venv",
+      "exit_code": 0,
+      "at": "2026-11-04T08:47:33+00:00",
+      "session_id": null,
+      "label": "imports",
+      "log": ".claude/craft/logs/20261104T084733Z-imports.log"
+    },
+    {
+      "command": ".venv/bin/black --check . --exclude .venv",
+      "exit_code": 0,
+      "at": "2026-11-04T08:47:34+00:00",
+      "session_id": null,
+      "label": "format",
+      "log": ".claude/craft/logs/20261104T084734Z-format.log"
+    },
+    {
+      "command": "craft-spec trace --session 1",
+      "exit_code": 0,
+      "at": "2026-11-04T08:47:34+00:00",
+      "session_id": null,
+      "label": "trace"
+    },
+    {
+      "command": "scripts/test.sh -q",
+      "exit_code": 1,
+      "at": "2026-11-04T08:54:56+00:00",
+      "session_id": null,
+      "label": "tests",
+      "log": ".claude/craft/logs/20261104T085456Z-tests.log"
+    },
+    {
+      "command": "scripts/test.sh -q",
+      "exit_code": 1,
+      "at": "2026-11-04T08:55:27+00:00",
+      "session_id": null,
+      "label": "tests",
+      "log": ".claude/craft/logs/20261104T085527Z-tests.log"
+    },
+    {
+      "command": "scripts/test.sh -q",
+      "exit_code": 0,
+      "at": "2026-11-04T08:56:02+00:00",
+      "session_id": null,
+      "label": "tests",
+      "log": ".claude/craft/logs/20261104T085602Z-tests.log"
+    },
+    {
+      "command": "scripts/test.sh -q",
+      "exit_code": 0,
+      "at": "2026-11-04T08:56:32+00:00",
+      "session_id": null,
+      "label": "tests",
+      "log": ".claude/craft/logs/20261104T085632Z-tests.log"
+    },
+    {
+      "command": ".venv/bin/pylint integrations audit reviews panel gitlab_mock orchestrator manage.py tests_e2e",
+      "exit_code": 8,
+      "at": "2026-11-04T08:56:50+00:00",
+      "session_id": null,
+      "label": "lint",
+      "log": ".claude/craft/logs/20261104T085650Z-lint.log"
+    },
+    {
+      "command": ".venv/bin/isort --check reviews panel orchestrator integrations audit",
+      "exit_code": 0,
+      "at": "2026-11-04T08:56:51+00:00",
+      "session_id": null,
+      "label": "imports",
+      "log": ".claude/craft/logs/20261104T085651Z-imports.log"
+    },
+    {
+      "command": ".venv/bin/black --check .",
+      "exit_code": 0,
+      "at": "2026-11-04T08:56:51+00:00",
+      "session_id": null,
+      "label": "format",
+      "log": ".claude/craft/logs/20261104T085651Z-format.log"
+    },
+    {
+      "command": ".venv/bin/python manage.py makemigrations --check --dry-run",
+      "exit_code": 0,
+      "at": "2026-11-04T08:56:51+00:00",
+      "session_id": null,
+      "label": "migrations",
+      "log": ".claude/craft/logs/20261104T085651Z-migrations.log"
+    },
+    {
+      "command": "craft-spec trace --session 1",
+      "exit_code": 0,
+      "at": "2026-11-04T08:56:51+00:00",
+      "session_id": null,
+      "label": "trace"
+    },
+    {
+      "command": ".venv/bin/pylint integrations audit reviews panel gitlab_mock orchestrator manage.py tests_e2e",
+      "exit_code": 0,
+      "at": "2026-11-04T08:57:18+00:00",
+      "session_id": null,
+      "label": "lint",
+      "log": ".claude/craft/logs/20261104T085718Z-lint.log"
+    },
+    {
+      "command": ".venv/bin/black --check .",
+      "exit_code": 0,
+      "at": "2026-11-04T08:57:18+00:00",
+      "session_id": null,
+      "label": "format",
+      "log": ".claude/craft/logs/20261104T085718Z-format.log"
+    },
+    {
+      "command": "scripts/test.sh -q reviews/tests/test_merge_router.py",
+      "exit_code": 0,
+      "at": "2026-11-04T08:57:20+00:00",
+      "session_id": null,
+      "label": "tests",
+      "log": ".claude/craft/logs/20261104T085720Z-tests.log"
+    },
+    {
+      "command": "craft-spec trace --session 1",
+      "exit_code": 0,
+      "at": "2026-11-04T08:57:20+00:00",
+      "session_id": null,
+      "label": "trace"
+    },
+    {
+      "command": "scripts/test.sh -q",
+      "exit_code": 0,
+      "at": "2026-11-04T08:58:13+00:00",
+      "session_id": null,
+      "label": "tests",
+      "log": ".claude/craft/logs/20261104T085813Z-tests.log"
+    },
+    {
+      "command": "scripts/test.sh -q",
+      "exit_code": 0,
+      "at": "2026-11-04T08:58:42+00:00",
+      "session_id": null,
+      "label": "tests",
+      "log": ".claude/craft/logs/20261104T085842Z-tests.log"
+    },
+    {
+      "command": ".venv/bin/pylint integrations audit reviews panel gitlab_mock orchestrator manage.py tests_e2e",
+      "exit_code": 0,
+      "at": "2026-11-04T08:58:56+00:00",
+      "session_id": null,
+      "label": "lint",
+      "log": ".claude/craft/logs/20261104T085856Z-lint.log"
+    },
+    {
+      "command": ".venv/bin/isort --check . --skip .venv",
+      "exit_code": 0,
+      "at": "2026-11-04T08:58:56+00:00",
+      "session_id": null,
+      "label": "imports",
+      "log": ".claude/craft/logs/20261104T085856Z-imports.log"
+    },
+    {
+      "command": ".venv/bin/black --check . --exclude .venv",
+      "exit_code": 0,
+      "at": "2026-11-04T08:58:57+00:00",
+      "session_id": null,
+      "label": "format",
+      "log": ".claude/craft/logs/20261104T085857Z-format.log"
+    },
+    {
+      "command": "craft-spec trace --session 1",
+      "exit_code": 0,
+      "at": "2026-11-04T08:58:57+00:00",
+      "session_id": null,
+      "label": "trace"
+    }
+  ],
+  "route": "project",
+  "checkpoint_command": "scripts/test.sh -q",
+  "spec": "2026-11-04-merge-routing",
+  "updated_at": "2026-11-04T08:58:57+00:00"
+}

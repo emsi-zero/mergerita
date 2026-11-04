@@ -12,6 +12,7 @@ PANEL_URLS = [
     "/panel/mrs/",
     "/panel/mrs/1/",
     "/panel/reviews/",
+    "/panel/merges/",
     "/panel/availability/",
 ]
 

@@ -26,6 +26,7 @@ from reviews.models import (
     AreaReviewState,
     CapacityDay,
     Leave,
+    MergeAssignment,
     MergeRequest,
     MergeRequestState,
     Person,
@@ -280,6 +281,49 @@ class MyReviewsView(PanelAccessMixin, TemplateView):
             "budget": budget,
             "over": booked > budget,
         }
+
+
+class MyMergesView(PanelAccessMixin, TemplateView):
+    """List the open merge assignments of a merge owner, in window order (MRG-4)."""
+
+    template_name = "panel/merges.html"
+
+    def get(
+        self, request: HttpRequest, *args: object, **kwargs: object
+    ) -> HttpResponse:
+        if not self.person.is_merge_owner:
+            raise Http404
+        return super().get(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs: object) -> dict:
+        context = super().get_context_data(**kwargs)
+        assignments = list(
+            MergeAssignment.objects.filter(
+                merge_owner=self.person,
+                merged_at__isnull=True,
+                cancelled_at__isnull=True,
+            )
+            .select_related("merge_request__author")
+            .prefetch_related(
+                Prefetch(
+                    "merge_request__area_reviews",
+                    queryset=AreaReview.objects.select_related(
+                        "reviewer"
+                    ).prefetch_related("areas"),
+                )
+            )
+            .order_by("window", "pk")
+        )
+        for assignment in assignments:
+            area_reviews = assignment.merge_request.area_reviews.all()
+            assignment.areas = sorted(
+                {area.name for review in area_reviews for area in review.areas.all()}
+            )
+            assignment.approvers = sorted(
+                {review.reviewer.name for review in area_reviews if review.reviewer}
+            )
+        context["assignments"] = assignments
+        return context
 
 
 class RequestPresenceView(MyReviewsView):  # pylint: disable=too-many-ancestors

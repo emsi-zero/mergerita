@@ -227,7 +227,12 @@ class CoverageTest(TestCase):
                 ["approved"],
                 "approved",
                 0,
-                ["area_review.approved", "review_session.done", "mr.approved"],
+                [
+                    "area_review.approved",
+                    "review_session.done",
+                    "mr.approved",
+                    "merge.unassigned",
+                ],
             ),
             (
                 2,

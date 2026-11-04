@@ -8,7 +8,7 @@ from django.utils import timezone
 
 from audit.services import record
 from integrations.adapters import GitLabGatewayInterface, get_gitlab_gateway
-from reviews import booking
+from reviews import booking, merge_router
 from reviews.ai_gate import APPROVED_STATE, REQUESTED_CHANGES_STATE
 from reviews.alerts import queue_notification
 from reviews.models import (
@@ -297,3 +297,4 @@ def _approve(merge_request: MergeRequest) -> None:
         {"state": MergeRequestState.IN_REVIEW},
         {"state": merge_request.state},
     )
+    merge_router.assign_merge(merge_request)
