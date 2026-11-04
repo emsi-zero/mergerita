@@ -43,3 +43,6 @@ Accepted: an approval landing between the verdict read and the MR lock gives a f
 ## 2026-11-04 — Session 2 Gate A (after round 2 fixes)
 tests `scripts/test.sh -q` PASS (90 passed, 271 subtests) · pylint 10.00 PASS · isort PASS · black PASS · makemigrations --check clean · `craft-spec trace` PASS (12/12, no warnings). Round 2 Mediums and Low fixed; no re-review (no High).
 Gate B: green. Session 2: done.
+
+## 2026-11-04 09:52 UTC — spec closed
+Session archived: /home/tabdeal/side-projects/merge-orchestrator/.claude/craft/archive/session-20261104T095257+0000.json
