@@ -3,7 +3,7 @@ from datetime import time
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.core.validators import MinValueValidator
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models.functions import Now
 from django.utils import timezone
@@ -85,6 +85,8 @@ class MergeRequest(models.Model):
     web_url = models.URLField(max_length=500, null=True, blank=True)
     # When the MR last moved to `approved`. Null for MRs approved before it was recorded.
     approved_at = models.DateTimeField(null=True, blank=True)
+    # When the state last changed. Set by `save()` only (RBW-20).
+    state_changed_at = models.DateTimeField(default=timezone.now, db_default=Now())
 
     class Meta:
         constraints = [
@@ -92,6 +94,32 @@ class MergeRequest(models.Model):
                 fields=["project_id", "iid"], name="mr_unique_project_iid"
             )
         ]
+
+    # The state as stored, set when loaded or saved. None on a new instance.
+    _loaded_state: str | None = None
+
+    @classmethod
+    def from_db(cls, db, field_names, values):
+        instance = super().from_db(db, field_names, values)
+        instance._loaded_state = instance.state  # pylint: disable=protected-access
+        return instance
+
+    def save(self, *args, **kwargs):
+        """Stamp `state_changed_at` when the state differs from the stored one (RBW-20)."""
+        if self._loaded_state not in (None, self.state):
+            self.state_changed_at = timezone.now()
+            update_fields = kwargs.get("update_fields")
+            if update_fields is not None and "state" in update_fields:
+                kwargs["update_fields"] = {*update_fields, "state_changed_at"}
+        update_fields = kwargs.get("update_fields")
+        super().save(*args, **kwargs)
+        if update_fields is None or "state" in update_fields:
+            self._loaded_state = self.state
+
+    def refresh_from_db(self, using=None, fields=None, from_queryset=None):
+        super().refresh_from_db(using, fields, from_queryset)
+        if fields is None or "state" in fields:
+            self._loaded_state = self.state
 
 
 class ReconcileCursor(models.Model):
@@ -164,6 +192,11 @@ class AreaReview(models.Model):
     slot_minutes = models.PositiveIntegerField(default=0)
     reason = models.TextField(blank=True, default="")
     changes_requested_at = models.DateTimeField(null=True, blank=True)
+    # When the area review last became unbooked. Null while it is booked.
+    # db_default covers inserts by a worker still on the old code during a deploy.
+    unbooked_since = models.DateTimeField(
+        null=True, blank=True, default=timezone.now, db_default=Now()
+    )
 
 
 class ReviewSessionOutcome(models.TextChoices):  # pylint: disable=too-many-ancestors
@@ -284,6 +317,40 @@ class MergeRoutingSettings(models.Model):
 
     @classmethod
     def load(cls) -> "MergeRoutingSettings":
+        """Return the single settings row, creating it when it is missing."""
+        return cls.objects.get_or_create(pk=1)[0]
+
+
+class RebookingSettings(models.Model):
+    """The single row of rebooking and watchdog settings. Use `load()`."""
+
+    # Local time (TIME_ZONE) when the daily rebooking and the watchdog run.
+    daily_run_time = models.TimeField(default=time(7, 30), db_default=time(7, 30))
+    ai_review_threshold_days = models.PositiveIntegerField(
+        default=1,
+        db_default=1,
+        validators=[MinValueValidator(1), MaxValueValidator(60)],
+    )
+    triage_threshold_days = models.PositiveIntegerField(
+        default=1,
+        db_default=1,
+        validators=[MinValueValidator(1), MaxValueValidator(60)],
+    )
+    stale_threshold_days = models.PositiveIntegerField(
+        default=5,
+        db_default=5,
+        validators=[MinValueValidator(1), MaxValueValidator(60)],
+    )
+    # The local days the jobs last claimed. Written only by the jobs.
+    last_rebooking_on = models.DateField(null=True, blank=True, editable=False)
+    last_watchdog_on = models.DateField(null=True, blank=True, editable=False)
+
+    class Meta:
+        verbose_name = "Rebooking and watchdog settings"
+        verbose_name_plural = "Rebooking and watchdog settings"
+
+    @classmethod
+    def load(cls) -> "RebookingSettings":
         """Return the single settings row, creating it when it is missing."""
         return cls.objects.get_or_create(pk=1)[0]
 

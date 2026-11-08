@@ -614,8 +614,10 @@ DONE_CLAIM = re.compile(
     r"|\bstate\s*[:=]\s*\**\s*done\b"
     r"|\bstatus\s*[:=]\s*\**\s*done\b"
     r"|\b(?:is|are|now|marked|set\s+to|moved\s+to)\s+\**done\b"
-    r"|\bgate\s*a\b[^\n]{0,80}?\b" + PASS_WORD + r"\b"
-    r"|\bgate\s*b\b[^\n]{0,80}?\b" + PASS_WORD + r"\b",
+    # The gate and the pass word must share a clause: "re-ran Gate A myself:
+    # 101 tests pass" is not a claim that Gate A passed.
+    r"|\bgate\s*a\b[^\n.!?;:,]{0,80}?\b" + PASS_WORD + r"\b"
+    r"|\bgate\s*b\b[^\n.!?;:,]{0,80}?\b" + PASS_WORD + r"\b",
     re.IGNORECASE,
 )
 NEGATION = re.compile(

@@ -8,17 +8,17 @@ Checkpoint: `.claude/rmo/bin/rmo gate-a`
 State: pending
 Covers: RBW-20, RBW-21, RBW-22
 
-- [ ] T1 — `MergeRequest.state_changed_at`, plus `from_db` and a `save()` override that stamps it when the state changes and adds it to `update_fields`, in `reviews/models.py` — RBW-20
-- [ ] T2 — `AreaReview.unbooked_since` (default `timezone.now`, nullable). `_unbook()` sets it and `_book()` clears it, in `reviews/booking.py` — RBW-21 (data), used by RBW-2
-- [ ] T3 — the `RebookingSettings` model with `load()` and validators, and its admin (no add or delete), in `reviews/models.py` and `reviews/admin.py` — RBW-22
-- [ ] T4 — migration `reviews/migrations/0013_rebooking_and_watchdog.py`, with a module-level `backfill` — RBW-21
-- [ ] T5 — tests in `reviews/tests/test_rebooking_data.py`: RBW-20 (a state change, a non-state save, create), RBW-21 (call `backfill` with the live registry: an MR with audit, an MR without audit, an unbooked area review with and without an `area_review.unbooked` event), RBW-22 (the admin form rejects 0 and 61 and accepts 1 and 60)
-- [ ] T6 — run the existing suite: no test breaks from the new `update_fields` behaviour
+- [x] T1 — `MergeRequest.state_changed_at`, plus `from_db` and a `save()` override that stamps it when the state changes and adds it to `update_fields`, in `reviews/models.py` — RBW-20
+- [x] T2 — `AreaReview.unbooked_since` (default `timezone.now`, nullable). `_unbook()` sets it and `_book()` clears it, in `reviews/booking.py` — RBW-21 (data), used by RBW-2
+- [x] T3 — the `RebookingSettings` model with `load()` and validators, and its admin (no add or delete), in `reviews/models.py` and `reviews/admin.py` — RBW-22
+- [x] T4 — migration `reviews/migrations/0013_rebooking_and_watchdog.py`, with a module-level `backfill` — RBW-21
+- [x] T5 — tests in `reviews/tests/test_rebooking_data.py`: RBW-20 (a state change, a non-state save, create), RBW-21 (call `backfill` with the live registry: an MR with audit, an MR without audit, an unbooked area review with and without an `area_review.unbooked` event), RBW-22 (the admin form rejects 0 and 61 and accepts 1 and 60)
+- [x] T6 — run the existing suite: no test breaks from the new `update_fields` behaviour
 
 Gate A: `.claude/rmo/bin/rmo gate-a --session 1 --log "Session 1 Gate A"`
 Gate B: rmo-reviewer (spec, style, query) · rmo-deep-reviewer (logic, security; families DATA, TX)
 
-Resume: —
+Resume: done. Models, booking writes, admin, migration 0013 (with backfill) and tests are in. Gate A is red only for the pre-existing smoke test failure. Session 2 starts at T1.
 
 ## Session 2 — Daily rebooking, admin action, worker wiring
 

@@ -285,8 +285,16 @@ def _unbook(area_review: AreaReview) -> None:
     area_review.booked_day = None
     area_review.slot_minutes = 0
     area_review.reason = ""
+    area_review.unbooked_since = timezone.now()
     area_review.save(
-        update_fields=["state", "reviewer", "booked_day", "slot_minutes", "reason"]
+        update_fields=[
+            "state",
+            "reviewer",
+            "booked_day",
+            "slot_minutes",
+            "reason",
+            "unbooked_since",
+        ]
     )
     record(
         "orchestrator",
@@ -324,8 +332,16 @@ def _book(
         f"{candidate.tier} owner; {row.day.isoformat()}; "
         f"{free} of {row.budget_minutes} minutes free"
     )
+    area_review.unbooked_since = None
     area_review.save(
-        update_fields=["state", "reviewer", "booked_day", "slot_minutes", "reason"]
+        update_fields=[
+            "state",
+            "reviewer",
+            "booked_day",
+            "slot_minutes",
+            "reason",
+            "unbooked_since",
+        ]
     )
     ReviewSession.objects.create(
         area_review=area_review,

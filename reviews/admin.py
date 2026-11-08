@@ -15,6 +15,7 @@ from reviews.models import (
     MergeRoutingSettings,
     Ownership,
     Person,
+    RebookingSettings,
 )
 
 
@@ -67,6 +68,22 @@ class MergeRoutingSettingsAdmin(admin.ModelAdmin):
         self, request: HttpRequest, obj: MergeRoutingSettings | None = None
     ) -> bool:
         return False
+
+    def save_model(self, request, obj, form, change) -> None:
+        """Save only the editable fields, so a day claim the worker wrote since
+        the form was loaded is never written back to an older value (INV-1)."""
+        obj.save(
+            update_fields=[
+                field.name
+                for field in obj._meta.concrete_fields  # pylint: disable=protected-access
+                if field.editable and not field.primary_key
+            ]
+        )
+
+
+@admin.register(RebookingSettings)
+class RebookingSettingsAdmin(MergeRoutingSettingsAdmin):
+    """Edit the single settings row: no add, no delete."""
 
 
 for model in (Leave, CodeArea, Ownership):
