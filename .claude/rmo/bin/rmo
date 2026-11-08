@@ -475,7 +475,9 @@ def criteria_ids(text):
     ids, inside = [], False
     for line in text.splitlines():
         heading = HEADING.match(line)
-        if heading:
+        # Only a level-1 or level-2 heading ends the section: "### Part 1"
+        # subheadings inside "## Acceptance criteria" keep it open.
+        if heading and len(line) - len(line.lstrip("#")) <= 2:
             inside = heading.group(1).strip().lower().startswith("acceptance criteria")
             continue
         match = ROW_ID.match(line) if inside else None

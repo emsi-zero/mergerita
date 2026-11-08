@@ -1,0 +1,10 @@
+{
+  "approvals": [
+    {
+      "spec": "2026-11-08-daily-rebooking-and-stale-mr-watchdog",
+      "sha256": "b51325e3c263487ebbaf5dba5cabcfe520a2b89cd57d8e34c48efa1907e9019a",
+      "approved_at": "2026-11-08T11:49:11+00:00",
+      "note": ""
+    }
+  ]
+}
