@@ -5,7 +5,7 @@ Checkpoint: `.claude/rmo/bin/rmo gate-a`
 
 ## Session 1 — Data: state_changed_at, unbooked_since, settings row, migration
 
-State: pending
+State: done
 Covers: RBW-20, RBW-21, RBW-22
 
 - [x] T1 — `MergeRequest.state_changed_at`, plus `from_db` and a `save()` override that stamps it when the state changes and adds it to `update_fields`, in `reviews/models.py` — RBW-20
@@ -18,7 +18,7 @@ Covers: RBW-20, RBW-21, RBW-22
 Gate A: `.claude/rmo/bin/rmo gate-a --session 1 --log "Session 1 Gate A"`
 Gate B: rmo-reviewer (spec, style, query) · rmo-deep-reviewer (logic, security; families DATA, TX)
 
-Resume: done. Models, booking writes, admin, migration 0013 (with backfill) and tests are in. Gate A is red only for the pre-existing smoke test failure. Session 2 starts at T1.
+Resume: Session 1 closed: Gate A green (102 passed), Gate B round 1 fixes in. Session 2 starts at T1, `alert_on_no_fit` in `booking.book_area_review`.
 
 ## Session 2 — Daily rebooking, admin action, worker wiring
 
