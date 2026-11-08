@@ -5,6 +5,12 @@
       "sha256": "b51325e3c263487ebbaf5dba5cabcfe520a2b89cd57d8e34c48efa1907e9019a",
       "approved_at": "2026-11-08T11:49:11+00:00",
       "note": ""
+    },
+    {
+      "spec": "2026-11-08-daily-rebooking-and-stale-mr-watchdog",
+      "sha256": "96c96088b7264e1d6e6c28c3dc367ba3c6ff2c8f6691329dccc70f6d48db8470",
+      "approved_at": "2026-11-08T13:50:31+00:00",
+      "note": "delta: add RBW-23, clarify RBW-11"
     }
   ]
 }

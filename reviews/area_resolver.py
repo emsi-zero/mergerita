@@ -56,6 +56,22 @@ def resolve_areas(payload: dict) -> None:
             _resolve(merge_request, changes)
 
 
+def mark_in_review(merge_request: MergeRequest) -> None:
+    """Move an MR from `awaiting_booking` to `in_review` and audit it.
+
+    The caller holds the MR lock and has checked the state.
+    """
+    merge_request.state = MergeRequestState.IN_REVIEW
+    merge_request.save(update_fields=["state"])
+    record(
+        "orchestrator",
+        "mr.in_review",
+        merge_request,
+        {"state": MergeRequestState.AWAITING_BOOKING},
+        {"state": merge_request.state},
+    )
+
+
 def _follow_up(
     merge_request: MergeRequest, verdicts: dict[int, coverage.Verdict]
 ) -> None:
@@ -83,15 +99,7 @@ def _follow_up(
                 continue
             coverage.reset_approval(area_review)
         booking.book_follow_up(area_review)
-    merge_request.state = MergeRequestState.IN_REVIEW
-    merge_request.save(update_fields=["state"])
-    record(
-        "orchestrator",
-        "mr.in_review",
-        merge_request,
-        {"state": MergeRequestState.AWAITING_BOOKING},
-        {"state": merge_request.state},
-    )
+    mark_in_review(merge_request)
     outbox.enqueue("check_coverage", {"merge_request_id": merge_request.pk})
 
 
@@ -136,15 +144,7 @@ def _resolve(merge_request: MergeRequest, changes: Changes) -> None:
         )
         booked_all = booking.book_area_review(area_review) and booked_all
     if booked_all:
-        merge_request.state = MergeRequestState.IN_REVIEW
-        merge_request.save(update_fields=["state"])
-        record(
-            "orchestrator",
-            "mr.in_review",
-            merge_request,
-            {"state": MergeRequestState.AWAITING_BOOKING},
-            {"state": merge_request.state},
-        )
+        mark_in_review(merge_request)
 
 
 def _group_areas(touched: list[CodeArea], author_id: int) -> list[list[CodeArea]]:

@@ -22,19 +22,19 @@ Resume: Session 1 closed: Gate A green (102 passed), Gate B round 1 fixes in. Se
 
 ## Session 2 — Daily rebooking, admin action, worker wiring
 
-State: pending
-Covers: RBW-1, RBW-2, RBW-3, RBW-4, RBW-5, RBW-6, RBW-7, RBW-8, RBW-9, RBW-10, RBW-11
+State: done
+Covers: RBW-1, RBW-2, RBW-3, RBW-4, RBW-5, RBW-6, RBW-7, RBW-8, RBW-9, RBW-10, RBW-11, RBW-23
 
-- [ ] T1 — `alert_on_no_fit: bool = True` in `booking.book_area_review`, in `reviews/booking.py` — RBW-10
-- [ ] T2 — `reviews/rebooking.py`: `run_daily_rebooking`, `retry_unbooked`, `_rebook_one`, `_summary`, following design.md "Write paths and locks" — RBW-1, 2, 4, 5, 6, 7, 9, 10
-- [ ] T3 — call `run_daily_rebooking()` in `reviews/management/commands/run_worker.py` — RBW-1
-- [ ] T4 — the "Retry booking" action on `MergeRequestAdmin`, in `reviews/admin.py` — RBW-11
-- [ ] T5 — tests in `reviews/tests/test_rebooking.py`: RBW-1, 2, 4, 5, 6, 7, 9, 10, 11 (TestCase); RBW-3 and RBW-8 (two-thread TransactionTestCase, checked by removing the claim lock and the MR re-check)
+- [x] T1 — `alert_on_no_fit: bool = True` in `booking.book_area_review`, in `reviews/booking.py` — RBW-10
+- [x] T2 — `reviews/rebooking.py`: `run_daily_rebooking`, `retry_unbooked`, `_rebook_one`, `_summary`, following design.md "Write paths and locks" — RBW-1, 2, 4, 5, 6, 7, 9, 10
+- [x] T3 — call `run_daily_rebooking()` in `reviews/management/commands/run_worker.py` — RBW-1
+- [x] T4 — the "Retry booking" action on `MergeRequestAdmin`, in `reviews/admin.py` — RBW-11
+- [x] T5 — tests in `reviews/tests/test_rebooking.py`: RBW-1, 2, 4, 5, 6, 7, 9, 10, 11, 23 (TestCase); RBW-3 and RBW-8 (two-thread TransactionTestCase, checked by removing the claim lock and the MR re-check)
 
 Gate A: `.claude/rmo/bin/rmo gate-a --session 2 --log "Session 2 Gate A"`
 Gate B: rmo-reviewer (spec, style, query) · rmo-deep-reviewer (logic, security; families LOCK, TX, IO, SEP)
 
-Resume: —
+Resume: Session 2 closed: Gate A green (114 passed, trace 12/12), Gate B green after a delta re-review. `area_resolver.mark_in_review` is the shared in_review transition. Session 3 starts at T1, reviews/watchdog.py (reuse rebooking._is_due shape; run only when last_rebooking_on == today).
 
 ## Session 3 — Stale-MR watchdog, worker wiring, docs
 

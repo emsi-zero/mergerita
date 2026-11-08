@@ -2,7 +2,7 @@
 
 - **Ceiling:** High · **Min confidence:** 0.7
 - **Reads:** `spec.md` in full, `design.md` when present, the diff. Run
-  `.claude/rmo/bin/rmo trace` (read-only use is fine) instead of grepping test names.
+  `.claude/rmo/bin/rmo trace --no-record [--session N]` instead of grepping test names.
 
 ## Checklist — answer every item
 

@@ -4,7 +4,7 @@ from django.db.models import QuerySet
 from django.http import HttpRequest
 
 from integrations.admin import ReadOnlyAdmin
-from reviews import merge_retry
+from reviews import merge_retry, rebooking
 from reviews.models import (
     AreaReview,
     CapacityDay,
@@ -92,9 +92,9 @@ for model in (Leave, CodeArea, Ownership):
 
 @admin.register(MergeRequest)
 class MergeRequestAdmin(ReadOnlyAdmin):
-    """Read-only, apart from the "Retry merge routing" action (MRDR-4)."""
+    """Read-only, apart from the "Retry merge routing" (MRDR-4) and "Retry booking" actions."""
 
-    actions = ["retry_merge_routing"]
+    actions = ["retry_merge_routing", "retry_booking"]
 
     @admin.action(description="Retry merge routing", permissions=["change"])
     def retry_merge_routing(
@@ -106,6 +106,20 @@ class MergeRequestAdmin(ReadOnlyAdmin):
         self.message_user(
             request,
             f"{result.assigned} assigned, {len(result.unassigned)} still unassigned, "
+            f"{result.skipped} skipped.",
+            messages.SUCCESS,
+        )
+
+    @admin.action(description="Retry booking", permissions=["change"])
+    def retry_booking(
+        self, request: HttpRequest, queryset: QuerySet[MergeRequest]
+    ) -> None:
+        result = rebooking.retry_unbooked(
+            rebooking.ADMIN, list(queryset.values_list("pk", flat=True))
+        )
+        self.message_user(
+            request,
+            f"{result.booked} booked, {len(result.unbooked)} still unbooked, "
             f"{result.skipped} skipped.",
             messages.SUCCESS,
         )

@@ -47,13 +47,14 @@ def lock_booking() -> None:
         cursor.execute("SELECT pg_advisory_xact_lock(%s)", [BOOKING_LOCK_KEY])
 
 
-def book_area_review(
+def book_area_review(  # pylint: disable=too-many-arguments,too-many-locals
     area_review: AreaReview,
     *,
     only_reviewer: Person | None = None,
     exclude: Collection[int] = (),
     after_day: date | None = None,
     continuation: bool = False,
+    alert_on_no_fit: bool = True,
 ) -> bool:
     """Book a session of an area review. Return True when booked.
 
@@ -63,7 +64,8 @@ def book_area_review(
     `after_day` skips that day and the days before it. The booking is a new
     pending session, and the area review caches it (INV-1). A reviewer who
     differs from the current one is set in GitLab and notified. When nothing
-    fits, an admin alert is queued, and a booked area review becomes unbooked.
+    fits, an admin alert is queued (unless `alert_on_no_fit` is False), and a
+    booked area review becomes unbooked.
     The caller owns the transaction and has no adapter call open (INV-5). The
     CapacityDay rows of the candidates stay locked until the caller commits.
     """
@@ -85,10 +87,11 @@ def book_area_review(
 
     if area_review.state == AreaReviewState.BOOKED:
         _unbook(area_review)
-    queue_admin_alert(
-        f"MR {merge_request.project_id}:{merge_request.iid}: no reviewer fits "
-        f"within {settings.RMO_BOOKING_HORIZON_DAYS} days for area review {area_review.pk}."
-    )
+    if alert_on_no_fit:
+        queue_admin_alert(
+            f"MR {merge_request.project_id}:{merge_request.iid}: no reviewer fits "
+            f"within {settings.RMO_BOOKING_HORIZON_DAYS} days for area review {area_review.pk}."
+        )
     return False
 
 

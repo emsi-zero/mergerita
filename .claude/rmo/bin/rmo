@@ -5,7 +5,7 @@ Spec lifecycle
     rmo new --route task|project --title "..." [--key KEY]
     rmo status [--quiet]
     rmo approve [--note "..."]        record the developer's approval of spec.md
-    rmo trace [--session N]           one test per acceptance criterion
+    rmo trace [--session N] [--no-record]  one test per acceptance criterion
     rmo log "<heading>" ["<line>" ...] append an entry to the active log.md
     rmo close                         archive the session, clear ACTIVE
 
@@ -567,7 +567,9 @@ def cmd_trace(argv, root):
     if active_spec(root) is None:
         print("No active spec. Nothing to trace.", file=sys.stderr)
         return 2
-    code, summary = trace(root, arg(argv, "--session"))
+    # Reviewers pass --no-record: a read-only trace must not replace the
+    # result the Stop hook judges (a full trace fails while sessions remain).
+    code, summary = trace(root, arg(argv, "--session"), record="--no-record" not in argv)
     if code == 2:
         print(summary, file=sys.stderr)
     return code
