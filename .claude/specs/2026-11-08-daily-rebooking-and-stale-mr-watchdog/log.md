@@ -110,3 +110,9 @@ Gate A: green
 rmo-reviewer COMMENT (1 Medium, 3 Low, 1 below threshold); rmo-deep-reviewer APPROVE (1 Medium below threshold, 2 Low). Merged and confirmed: missed slot one line per MR (RBW-18), fixed with a subTest. Lows fixed: shared claim_day helper (duplicate-code pragma removed, RBW-3 and RBW-12 mutation-checked again), cases keyed by count key, README subsection and midnight note, run-time clause test.
 Dropped: settings admin overwriting the watchdog claim (already fixed in Session 1 by save_model). Skipped: SQL pre-filter for No progress (below threshold).
 No re-review: no Critical or High. Gate A green (122 passed, trace 23/23). Session 3 done.
+
+## 2026-11-08 14:19 UTC — done
+Daily rebooking (RBW-1..11, 23) and stale-MR watchdog (RBW-12..19) on the RebookingSettings row, with state_changed_at and unbooked_since (RBW-20..22). 23/23 criteria traced; both gates green in all three sessions.
+
+## 2026-11-08 14:19 UTC — spec closed
+Session archived: .claude/rmo/state/archive/session-20261108T141925Z.json
