@@ -77,3 +77,36 @@ Round 1: rmo-reviewer COMMENT (4 Low); rmo-deep-reviewer COMMENT (1 Medium M1, 3
 Delta re-review (deep-reviewer): round-1 findings all fixed; new Medium N1 (RBW-23 lock-time check untested because a selection-time filter hid it). Fixed by removing the selection-time filter so every MR goes through the check under the MR lock; mutation-checked (removing the lock-time check fails the RBW-23 test).
 Accepted: a reviewer who asked for more time can be rebooked on the same day by the retry (RBW-4 does not require after_day); the admin summary lists only selected MRs (RBW-11).
 Gate B green: no open Critical or High. Session 2 done.
+
+## 2026-11-08 14:05 UTC — Session 3 Gate A
+tests PASS (122 passed, 315 subtests passed in 38.38s) · lint FAIL (Your code has been rated at 10.00/10 (previous run: 10.00/10, -0.00)) · imports PASS (clean) · format PASS (clean) · migrations PASS (clean) · trace PASS (8/8)
+Gate A: red
+
+## 2026-11-08 14:06 UTC — Session 3 Gate A
+tests PASS (122 passed, 315 subtests passed in 37.37s) · lint PASS (Your code has been rated at 10.00/10 (previous run: 10.00/10, +0.00)) · imports PASS (clean) · format PASS (clean) · migrations PASS (clean) · trace PASS (8/8)
+Gate A: green
+
+## 2026-11-08 14:13 UTC — Session 3 Gate A (after review round 1)
+tests PASS (122 passed, 317 subtests passed in 38.83s) · lint FAIL (Your code has been rated at 10.00/10 (previous run: 10.00/10, -0.00)) · imports FAIL (ERROR: /home/tabdeal/side-projects/merge-orchestrator/.claude/worktrees/rebooking-watchdog/reviews/watchdog.py Imports are incorrectly sorted and/or formatted.) · format FAIL (1 file would be reformatted, 119 files would be left unchanged.) · migrations PASS (clean) · trace PASS (8/8)
+Gate A: red
+
+## 2026-11-08 14:14 UTC — Session 3 Gate A (after review round 1)
+tests PASS (122 passed, 317 subtests passed in 38.86s) · lint FAIL (Your code has been rated at 10.00/10 (previous run: 10.00/10, +0.00)) · imports FAIL (ERROR: /home/tabdeal/side-projects/merge-orchestrator/.claude/worktrees/rebooking-watchdog/reviews/watchdog.py Imports are incorrectly sorted and/or formatted.) · format PASS (clean) · migrations PASS (clean) · trace PASS (8/8)
+Gate A: red
+
+## 2026-11-08 14:15 UTC — Session 3 Gate A (after review round 1)
+tests PASS (122 passed, 317 subtests passed in 38.89s) · lint FAIL (Your code has been rated at 10.00/10 (previous run: 10.00/10, +0.00)) · imports PASS (clean) · format PASS (clean) · migrations PASS (clean) · trace PASS (8/8)
+Gate A: red
+
+## 2026-11-08 14:16 UTC — Session 3 Gate A (after review round 1)
+tests PASS (122 passed, 317 subtests passed in 38.66s) · lint PASS (Your code has been rated at 10.00/10 (previous run: 10.00/10, +0.00)) · imports PASS (clean) · format PASS (clean) · migrations PASS (clean) · trace PASS (8/8)
+Gate A: green
+
+## 2026-11-08 14:17 UTC — Session 3 Gate A (verified after review round 1)
+tests PASS (122 passed, 317 subtests passed in 38.34s) · lint PASS (Your code has been rated at 10.00/10 (previous run: 10.00/10, +0.00)) · imports PASS (clean) · format PASS (clean) · migrations PASS (clean) · trace PASS (8/8)
+Gate A: green
+
+## 2026-11-08 14:18 UTC — Session 3 Gate B
+rmo-reviewer COMMENT (1 Medium, 3 Low, 1 below threshold); rmo-deep-reviewer APPROVE (1 Medium below threshold, 2 Low). Merged and confirmed: missed slot one line per MR (RBW-18), fixed with a subTest. Lows fixed: shared claim_day helper (duplicate-code pragma removed, RBW-3 and RBW-12 mutation-checked again), cases keyed by count key, README subsection and midnight note, run-time clause test.
+Dropped: settings admin overwriting the watchdog claim (already fixed in Session 1 by save_model). Skipped: SQL pre-filter for No progress (below threshold).
+No re-review: no Critical or High. Gate A green (122 passed, trace 23/23). Session 3 done.

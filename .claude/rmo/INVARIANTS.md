@@ -116,12 +116,14 @@ same change, with its source.
   worker must be stopped. `makemigrations --check` is part of Gate A.
 - **DATA-4 Stored URLs from GitLab** are http(s), at most 500 characters, and
   the check never raises. [MRV INV-4]
+- **DATA-5 MR state changes only through `MergeRequest.save()`,** never queryset
+  `update(state=...)`, so `state_changed_at` stays true. [RBW INV-5]
 
 ## Docs
 
 - Each feature adds or extends a lettered scenario in `docs/testing.md` §4. A
   scenario that was not run by hand is marked "(unverified)". The existing
-  scenarios are A–O (O = merge routing, O.8–9 = retry), so the next new one is **P**.
+  scenarios are A–Q (O = merge routing, O.8–9 = retry, P = daily rebooking, Q = watchdog), so the next new one is **R**.
 - A new GitLab field or assumption adds a smoke-test item in `docs/testing.md` §6 (1–17 so far).
 - A behaviour an admin or developer sees gets a README section. Architecture
   changes go into `docs/architecture-design.md`.

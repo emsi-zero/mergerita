@@ -97,6 +97,15 @@ Set it up in the admin:
 
 To try it with the mock GitLab: `scripts/gitlab-mock merge PROJECT_ID IID USER_ID` sets the MR to merged by that user and sends the hook. Scenario O in `docs/testing.md` has the full steps.
 
+### Rebooking and the watchdog
+
+When no reviewer fits an area review, it stays `unbooked`. The worker tries again every day, and a second job looks for MRs that stopped moving. Set it up in the admin, in *Rebooking and watchdog settings*. Set the run time well before midnight, because a run that crosses midnight skips that day's watchdog report.
+
+1. *Daily run time* (default 07:30, `Asia/Tehran`). At or after this time the worker rebooks first, then runs the watchdog, once per day each. A worker that was down at the run time catches up at its first pass after it.
+2. Thresholds in working days (1 to 60): *AI review* (default 1), *Triage* (default 1) and *Stale* (default 5). An MR is reported when it has waited more than the threshold.
+3. The rebooking tries every unbooked area review, oldest wait first, with the normal booking rules. It prefers the previous reviewer, and never books the author or a person who handed the area review back. It sends one admin alert that lists the area reviews still without a reviewer. To rebook at once, for example after adding an owner, select the MRs in *Merge requests* and run the action *Retry booking*.
+4. The watchdog sends one admin alert, grouped by case: *No AI verdict* (the AI Reviewer did not answer), *Missed slot* (a booked day passed with no outcome; the reviewer also gets a chat message), *Needs triage* (no admin handled it) and *No progress* (no state change for any other reason). It changes nothing. An MR that stays stuck is reported again the next day. Unbooked area reviews, `waiting_on_author` MRs and approved MRs without a merge owner are left out, because other summaries report them. Scenarios P and Q in `docs/testing.md` have the steps.
+
 ## Engineering workflow
 
 Changes here follow the project's own spec-driven workflow in `.claude/rmo/` (start with `.claude/rmo/WORKFLOW.md`). In Claude Code, run `/rmo <request>`. Every route runs its checks through `.claude/rmo/bin/rmo`. On the task and project routes, the developer approves a spec before any code is written. `rmo gate-a` runs the tests, pylint, isort, black, `makemigrations --check`, and the criterion-to-test trace in one command.

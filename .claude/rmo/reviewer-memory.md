@@ -58,3 +58,21 @@ kind: suppress
 applies-to: */migrations/*.py
 rule: Data migrations may run with the worker stopped, when the spec says so. Do not flag a mixed-version race for a migration documented that way.
 source: RVO 0008
+
+### M-daily-jobs-at-most-once
+kind: suppress
+applies-to: reviews/rebooking.py, reviews/watchdog.py
+rule: The daily rebooking and the watchdog each run at most once per local day. A crash after the day claim loses that day's run or report, and a run that crosses midnight skips that day's watchdog report (the README says to set the run time well before midnight). Still a defect: two runs on one day, or one bad item that stops a run.
+source: RBW design Failure modes, Session 3 review, 2026-11-08
+
+### M-rebooking-more-time-same-day
+kind: suppress
+applies-to: reviews/rebooking.py
+rule: The retry may rebook a reviewer who asked for more time on the same day as that session; it passes no `after_day` (RBW-4 does not require it). Still a defect: rebooking someone who handed the review back (RBW-5) or the author (RBW-6).
+source: RBW Session 2 review, 2026-11-08
+
+### M-rebooking-admin-summary-scoped
+kind: suppress
+applies-to: reviews/rebooking.py, reviews/admin.py
+rule: After the "Retry booking" admin action, the summary lists only the selected MRs' leftovers, and a selected MR with nothing to book counts as skipped (RBW-11). Do not flag the mixed MR and area-review units in the skipped count.
+source: RBW spec delta, 2026-11-08

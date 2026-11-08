@@ -272,6 +272,22 @@ This raises `AuditImmutableError`.
 8. Daily retry (MRDR): with no merge owner free, bring MR 5 to `approved`; the admin gets "no merge owner fits". In *Merge routing settings*, set *Daily retry time* to a minute from now (`Asia/Tehran`). A time such as `25:00` is rejected. When the worker passes that time, *Audit events* has `merge.retry_run` with the trigger `daily`, and the admin gets one alert "1 approved MR(s) still have no merge owner: 7:5 ... — waiting 0 day(s)". Later passes the same day do nothing.
 9. Manual retry: make Dana a merge owner again, open *Merge requests*, select MR 5 and one MR that is not approved, and run the action *Retry merge routing*. The page shows "1 assigned, 0 still unassigned, 1 skipped.", MR 5 has an open assignment, and Dana gets the chat message.
 
+### P. Daily rebooking (RBW) (unverified)
+
+1. Start the mock and the worker as in scenario B. Make MR 1 touch an area whose only owner (Sara, id 21) is on leave or has a budget of 0, so it is `unbooked`. The admin gets the first "no reviewer fits" alert, and MR 1 stays `awaiting_booking`.
+2. Give Sara capacity again in the admin (*Availability*, or raise her budget). Nothing is booked yet.
+3. In *Rebooking and watchdog settings*, set *Daily run time* to a minute in the past (`Asia/Tehran`), on a day when the worker has not yet rebooked. Run the worker once (`run_worker --once`, as in §3). MR 1 is `in_review`, the area review is `booked`, and *Audit events* has `area_review.booked`, `mr.in_review` and one `booking.retry_run` with the trigger `daily` and booked 1. Sara has a `notify` call. A second worker pass the same day does nothing.
+4. With another MR with no free owner, the run sends no per-review alert. The admin gets one "1 area review(s) still have no reviewer:" summary with the days waited.
+5. Retry booking: add an owner, open *Merge requests*, select the MR and one MR that is not unbooked, and run the action *Retry booking*. The page shows "1 booked, 0 still unbooked, 1 skipped." and the audit event has the trigger `admin`.
+
+### Q. Stale-MR watchdog (RBW) (unverified)
+
+1. In *Rebooking and watchdog settings*, set the AI review, triage and stale thresholds to 1.
+2. No AI verdict: open an MR in the mock and stop the AI Reviewer from answering. Move its *Ai gate entered at* back by three days in the shell (`MergeRequest.objects.filter(iid=1).update(ai_gate_entered_at=...)`).
+3. Missed slot: book an MR, then move the session's day to a past working day. Needs triage: do the same with an MR in `needs_triage` and an earlier *State changed at*.
+4. Run the worker after the rebooking has run that day. *Audit events* has one `watchdog.run` with a count per case. The admin gets one alert "Stuck MRs (N):" grouped by case, and the reviewer of the missed slot gets "Your review of MR ... has no outcome.". A second pass the same day does nothing.
+5. The next day, the same MRs are reported again. A `waiting_on_author` MR, an unbooked area review and an approved MR without a merge owner are never listed.
+
 ---
 
 ## 5. Reset

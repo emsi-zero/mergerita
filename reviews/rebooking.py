@@ -1,6 +1,7 @@
 """Daily rebooking of unbooked area reviews (RBW-1..11, RBW-23)."""
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date, datetime
 
@@ -40,6 +41,31 @@ class RebookingResult:
     unbooked: list[AreaReview] = field(default_factory=list)
 
 
+def claim_day(
+    column: str,
+    is_due: Callable[[RebookingSettings, datetime], bool],
+    now: datetime | None = None,
+) -> bool:
+    """Claim today for a daily job on the settings row (INV-1).
+
+    `is_due` is checked once without a lock and again under `select_for_update`,
+    so two workers never both claim the day. The claim commits before any work.
+    """
+    local = timezone.localtime(now)
+    settings_row = RebookingSettings.load()
+    if not is_due(settings_row, local):
+        return False
+    with transaction.atomic():
+        settings_row = RebookingSettings.objects.select_for_update().get(
+            pk=settings_row.pk
+        )
+        if not is_due(settings_row, local):
+            return False
+        setattr(settings_row, column, local.date())
+        settings_row.save(update_fields=[column])
+    return True
+
+
 def run_daily_rebooking(now: datetime | None = None) -> RebookingResult | None:
     """Run the daily rebooking once per local day, at or after the run time.
 
@@ -48,18 +74,8 @@ def run_daily_rebooking(now: datetime | None = None) -> RebookingResult | None:
     workers or two passes never both run it (INV-1, RBW-3). Return None when
     nothing ran.
     """
-    local = timezone.localtime(now)
-    settings_row = RebookingSettings.load()
-    if not _is_due(settings_row, local):
+    if not claim_day("last_rebooking_on", _is_due, now):
         return None
-    with transaction.atomic():
-        settings_row = RebookingSettings.objects.select_for_update().get(
-            pk=settings_row.pk
-        )
-        if not _is_due(settings_row, local):
-            return None
-        settings_row.last_rebooking_on = local.date()
-        settings_row.save(update_fields=["last_rebooking_on"])
     return retry_unbooked(DAILY)
 
 

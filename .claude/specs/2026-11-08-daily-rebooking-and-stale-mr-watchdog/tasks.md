@@ -1,6 +1,6 @@
 # TASKS: Daily rebooking and stale-MR watchdog
 
-Spec: spec.md · Key: RBW · Route: project · State: pending
+Spec: spec.md · Key: RBW · Route: project · State: done
 Checkpoint: `.claude/rmo/bin/rmo gate-a`
 
 ## Session 1 — Data: state_changed_at, unbooked_since, settings row, migration
@@ -38,16 +38,16 @@ Resume: Session 2 closed: Gate A green (114 passed, trace 12/12), Gate B green a
 
 ## Session 3 — Stale-MR watchdog, worker wiring, docs
 
-State: pending
+State: done
 Covers: RBW-12, RBW-13, RBW-14, RBW-15, RBW-16, RBW-17, RBW-18, RBW-19
 
-- [ ] T1 — `reviews/watchdog.py`: `run_daily_watchdog`, `working_days`, the case finders as a `(label, finder)` list, `_summary`, and the missed-slot chat — RBW-12 to RBW-19
-- [ ] T2 — call `run_daily_watchdog()` after `run_daily_rebooking()` in `run_worker.py` — RBW-12
-- [ ] T3 — tests in `reviews/tests/test_watchdog.py`: RBW-13 to RBW-19 (TestCase; RBW-19 has a midnight Asia/Tehran case and a weekend case; RBW-14 asserts that no MR, area review or session row changed); RBW-12 (two-thread TransactionTestCase, checked by removing the lock; plus "not before the rebooking claim")
-- [ ] T4 — docs: `docs/testing.md` scenarios P and Q; README section "Rebooking and the watchdog"
-- [ ] T5 — `.claude/rmo/INVARIANTS.md`: add "MR state changes only through `MergeRequest.save()`" (DATA-5), and set the next scenario letter to R
+- [x] T1 — `reviews/watchdog.py`: `run_daily_watchdog`, `working_days`, the case finders as a `(label, finder)` list, `_summary`, and the missed-slot chat — RBW-12 to RBW-19
+- [x] T2 — call `run_daily_watchdog()` after `run_daily_rebooking()` in `run_worker.py` — RBW-12
+- [x] T3 — tests in `reviews/tests/test_watchdog.py`: RBW-13 to RBW-19 (TestCase; RBW-19 has a midnight Asia/Tehran case and a weekend case; RBW-14 asserts that no MR, area review or session row changed); RBW-12 (two-thread TransactionTestCase, checked by removing the lock; plus "not before the rebooking claim")
+- [x] T4 — docs: `docs/testing.md` scenarios P and Q; README section "Rebooking and the watchdog"
+- [x] T5 — `.claude/rmo/INVARIANTS.md`: add "MR state changes only through `MergeRequest.save()`" (DATA-5), and set the next scenario letter to R
 
 Gate A: `.claude/rmo/bin/rmo gate-a --session 3 --log "Session 3 Gate A"`
 Gate B: rmo-reviewer (spec, style, query) · rmo-deep-reviewer (logic, security; families LOCK, TX, IO)
 
-Resume: —
+Resume: Session 3 closed: Gate A green (122 passed, trace 23/23), Gate B green after round 1 fixes. Spec closed by rmo-finish.

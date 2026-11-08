@@ -7,6 +7,7 @@ from integrations.outbox import dispatch_due
 from reviews.merge_retry import run_daily_retry
 from reviews.rebooking import run_daily_rebooking
 from reviews.reconciler import reconcile_all
+from reviews.watchdog import run_daily_watchdog
 from reviews.worker import process_next_event
 
 IDLE_SLEEP_SECONDS = 1
@@ -30,6 +31,7 @@ class Command(BaseCommand):
                 )
             run_daily_retry()
             run_daily_rebooking()
+            run_daily_watchdog()
             handled = process_next_event()
             dispatched = dispatch_due()
             if handled or dispatched:
