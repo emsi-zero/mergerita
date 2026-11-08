@@ -39,8 +39,10 @@ class _Receiver(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # pylint: disable=invalid-name
         length = int(self.headers["Content-Length"])
+        # Keep the case-insensitive header object: header names are
+        # case-insensitive, and httpx 0.28 sends "X-Gitlab-Event-Uuid".
         self.received.append(
-            {"headers": dict(self.headers), "body": json.loads(self.rfile.read(length))}
+            {"headers": self.headers, "body": json.loads(self.rfile.read(length))}
         )
         self.send_response(202)
         self.end_headers()
