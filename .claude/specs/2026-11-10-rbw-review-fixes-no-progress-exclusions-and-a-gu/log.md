@@ -27,3 +27,9 @@ All Lows fixed: the guard is a function run_guarded with an explicit failing set
 Correction to the spec's RWF-5 rationale: reconcile_all already catches GitLab errors per project and only logs them, so the guard alerts on database-level failures, not on a GitLab outage. One alert per streak still stands.
 Accepted: a future pending session on one area review keeps the MR out of No progress even when another area review is stuck without a session (RWF-1 as worded).
 No re-review (no Critical or High). Gate A green: 128 passed, trace 6/6.
+
+## 2026-11-10 11:55 UTC — done
+No progress skips MRs waiting for a future session or merge window; scheduled worker jobs are guarded with one alert per failing streak; web and worker restart unless stopped. 6/6 criteria traced, both gates green.
+
+## 2026-11-10 11:55 UTC — spec closed
+Session archived: .claude/rmo/state/archive/session-20261110T115513Z.json
