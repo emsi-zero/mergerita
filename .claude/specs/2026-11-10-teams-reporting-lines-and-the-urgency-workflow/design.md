@@ -66,8 +66,8 @@ the urgent rules (URG-25).
 2. While `candidate` is not None and not in `visited`:
    - Add `candidate` to `visited`.
    - If `candidate` is available today (not on leave) and is not the author, return it.
-   - Otherwise look for a delegate: first the author's team, if `candidate` leads it, then the lowest-pk team `candidate` leads.
-   - If that delegate is available and is not the author, return the delegate.
+   - Otherwise look for a delegate among the teams `candidate` leads: the author's team first, if `candidate` leads it, then the others by pk.
+   - Return the first delegate who is available, not the author, and not already visited.
    - Otherwise set `candidate = candidate.reports_to` and go on.
 3. Return None. The request then goes to the admins, and the visited set stops a cycle (INV-5).
 

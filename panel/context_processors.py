@@ -6,6 +6,7 @@ from django.conf import settings
 from django.http import HttpRequest
 from django.utils import timezone
 
+from reviews import urgency
 from reviews.models import (
     AreaReviewState,
     CodeArea,
@@ -49,6 +50,9 @@ def panel_header(request: HttpRequest) -> dict:
         counts["merges"] = MergeAssignment.objects.filter(
             merge_owner=person, merged_at__isnull=True, cancelled_at__isnull=True
         ).count()
+    decidable = urgency.decidable_requests(person).count()
+    if person.is_admin or decidable:
+        counts["urgency"] = decidable
     return {
         "panel_person": person,
         "panel_team": person.team,

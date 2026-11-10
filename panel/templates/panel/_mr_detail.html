@@ -31,6 +31,30 @@
   {% endfor %}
   </div>
 
+  <h3>Urgency</h3>
+  {% if active_urgency %}
+  <div class="item">
+    <div class="row">
+      <span class="grow strong">{% if active_urgency.status == "approved" %}Urgency approved{% else %}Urgency requested{% endif %}</span>
+      {% if active_urgency.status == "pending" %}
+      <form method="post" action="{% url 'panel:urgency-withdraw' merge_request.pk %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-ghost-danger">Withdraw request</button>
+      </form>
+      {% endif %}
+    </div>
+    <div class="muted small">{{ active_urgency.reason }}</div>
+  </div>
+  {% elif can_request_urgency %}
+  <form method="post" class="presence-form" action="{% url 'panel:urgency-request' merge_request.pk %}">
+    {% csrf_token %}
+    <input type="text" name="reason" class="field" maxlength="{{ urgency_max_length }}" required placeholder="Why is this urgent?" aria-label="Reason for urgency">
+    <button type="submit" class="btn btn-primary">Request urgency</button>
+  </form>
+  {% else %}
+  <div class="muted small">Urgency cannot be requested in this state.</div>
+  {% endif %}
+
   <h3>Presence requests</h3>
   <div class="stack">
   {% for review, ask in presence_requests %}

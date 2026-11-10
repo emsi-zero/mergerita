@@ -18,9 +18,11 @@ from panel.forms import (
     BudgetForm,
     LeaveForm,
     PresenceForm,
+    UrgencyDecisionForm,
+    UrgencyRequestForm,
     WorkingDaysForm,
 )
-from reviews import availability, outcomes, presence
+from reviews import availability, outcomes, presence, urgency
 from reviews.booking import person_budget
 from reviews.models import (
     AreaReview,
@@ -35,6 +37,8 @@ from reviews.models import (
     PresenceRequestState,
     ReviewSession,
     ReviewSessionOutcome,
+    UrgencyRequest,
+    UrgencyRequestStatus,
     default_working_days,
 )
 
@@ -202,8 +206,15 @@ def _detail_context(person: Person, pk: int) -> dict:
     merge_request.project = _project_path(merge_request.web_url)
     today = timezone.localdate()
     next_title, next_text = NEXT_STEPS[merge_request.state]
+    active_urgency = merge_request.urgency_requests.filter(
+        status__in=[UrgencyRequestStatus.PENDING, UrgencyRequestStatus.APPROVED]
+    ).first()
     return {
         "merge_request": merge_request,
+        "active_urgency": active_urgency,
+        "can_request_urgency": active_urgency is None
+        and merge_request.state in urgency.REQUESTABLE_STATES,
+        "urgency_max_length": settings.RMO_URGENCY_REASON_MAX_LENGTH,
         "area_reviews": area_reviews,
         "presence_requests": [
             (review, ask)
@@ -433,6 +444,118 @@ class SessionHandBackView(SessionOutcomeView):
 
     outcome = staticmethod(outcomes.hand_back)
     message = "Review handed back."
+
+
+class RequestUrgencyView(PanelAccessMixin, View):
+    """Ask for the author's own MR to be treated as urgent (URG-5, URG-6)."""
+
+    http_method_names = ["post"]
+
+    def post(self, request: HttpRequest, pk: int) -> HttpResponse:
+        form = UrgencyRequestForm(request.POST)
+        if not form.is_valid():
+            messages.error(
+                request,
+                "Give a reason of 1 to "
+                f"{settings.RMO_URGENCY_REASON_MAX_LENGTH} characters.",
+            )
+            return redirect("panel:mr-detail", pk=pk)
+        try:
+            urgency.request(
+                self.person,
+                pk,
+                form.cleaned_data["reason"],
+                f"user:{request.user.username}",
+            )
+        except urgency.UrgencyRefused as error:
+            messages.error(request, str(error))
+        else:
+            messages.success(request, "Urgency was requested.")
+        return redirect("panel:mr-detail", pk=pk)
+
+
+class WithdrawUrgencyView(PanelAccessMixin, View):
+    """Withdraw the author's pending request for one of their MRs (URG-7)."""
+
+    http_method_names = ["post"]
+
+    def post(self, request: HttpRequest, pk: int) -> HttpResponse:
+        latest = (
+            UrgencyRequest.objects.filter(merge_request_id=pk, requester=self.person)
+            .order_by("-pk")
+            .first()
+        )
+        if latest is None:
+            raise Http404
+        try:
+            urgency.withdraw(self.person, latest.pk, f"user:{request.user.username}")
+        except UrgencyRequest.DoesNotExist as error:
+            raise Http404 from error
+        except urgency.UrgencyRefused as error:
+            messages.error(request, str(error))
+        else:
+            messages.success(request, "The urgency request was withdrawn.")
+        return redirect("panel:mr-detail", pk=pk)
+
+
+class UrgencyRequestsView(PanelAccessMixin, TemplateView):
+    """List the pending urgency requests the person may decide (URG-9)."""
+
+    template_name = "panel/urgency.html"
+
+    def get_context_data(self, **kwargs: object) -> dict:
+        context = super().get_context_data(**kwargs)
+        requests = list(
+            urgency.decidable_requests(self.person)
+            .select_related("merge_request", "requester__team")
+            .order_by("created_at")
+        )
+        status_by_team = {}
+        for item in requests:
+            team = item.requester.team
+            item.team = team
+            item.team_count = None
+            if team is not None and team.weekly_urgent_limit is not None:
+                if team.pk not in status_by_team:
+                    status_by_team[team.pk] = urgency.team_status(team)
+                item.team_count, item.at_limit = status_by_team[team.pk]
+        context["requests"] = requests
+        return context
+
+
+class DecideUrgencyView(PanelAccessMixin, View):
+    """Decide a pending request; 404 for anyone who may not (URG-10)."""
+
+    http_method_names = ["post"]
+    decision: Callable[[Person, int, str, str], None]
+    message: str
+
+    def post(self, request: HttpRequest, pk: int) -> HttpResponse:
+        form = UrgencyDecisionForm(request.POST)
+        note = form.cleaned_data["note"] if form.is_valid() else ""
+        try:
+            self.decision(self.person, pk, note, f"user:{request.user.username}")
+        except UrgencyRequest.DoesNotExist as error:
+            raise Http404 from error
+        except urgency.UrgencyRefused as error:
+            messages.error(request, str(error))
+        else:
+            messages.success(request, self.message)
+        return redirect("panel:urgency")
+
+
+class ApproveUrgencyView(DecideUrgencyView):
+    """Approve a pending request (URG-9)."""
+
+    decision = staticmethod(urgency.approve)
+    message = "Urgency approved."
+
+
+class DeclineUrgencyView(DecideUrgencyView):
+    """Decline a pending request (URG-11)."""
+
+    decision = staticmethod(urgency.decline)
+    message = "Urgency declined."
 
 
 class AvailabilityView(PanelAccessMixin, TemplateView):

@@ -23,6 +23,12 @@
       "sha256": "c40c38a051bbbffa354abf195dc1d199c3f086207806eb9dda25bd8f0d39e865",
       "approved_at": "2026-11-10T12:07:54+00:00",
       "note": ""
+    },
+    {
+      "spec": "2026-11-10-teams-reporting-lines-and-the-urgency-workflow",
+      "sha256": "550211bb36aac689a63ef106afa914066bcf689ca3e5d283d161bec53e647ff4",
+      "approved_at": "2026-11-10T12:37:52+00:00",
+      "note": "delta: URG-10 and URG-12 reconciled, URG-26 added"
     }
   ]
 }

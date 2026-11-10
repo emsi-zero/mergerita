@@ -22,6 +22,7 @@
       <a href="{% url 'panel:mrs' %}" class="tab{% if current == 'mrs' or current == 'mr-detail' %} on{% endif %}">My MRs{% if tab_counts.mrs %}<span class="count">{{ tab_counts.mrs }}</span>{% endif %}</a>
       <a href="{% url 'panel:reviews' %}" class="tab{% if current == 'reviews' %} on{% endif %}">My reviews{% if tab_counts.reviews %}<span class="count">{{ tab_counts.reviews }}</span>{% endif %}</a>
       {% if user.person.is_merge_owner %}<a href="{% url 'panel:merges' %}" class="tab{% if current == 'merges' %} on{% endif %}">My merges{% if tab_counts.merges %}<span class="count">{{ tab_counts.merges }}</span>{% endif %}</a>{% endif %}
+      {% if tab_counts.urgency is not None %}<a href="{% url 'panel:urgency' %}" class="tab{% if current == 'urgency' %} on{% endif %}">Urgency requests{% if tab_counts.urgency %}<span class="count">{{ tab_counts.urgency }}</span>{% endif %}</a>{% endif %}
       <a href="{% url 'panel:availability' %}" class="tab{% if current|slice:':12' == 'availability' %} on{% endif %}">Availability</a>
       {% endwith %}
     </nav>
@@ -47,7 +48,7 @@
 <main>
 {% if messages %}
 <ul class="messages" role="status">
-  {% for message in messages %}<li class="notice-ok">{{ message }}</li>{% endfor %}
+  {% for message in messages %}<li class="{% if message.level_tag == 'error' %}notice-err{% else %}notice-ok{% endif %}">{{ message }}</li>{% endfor %}
 </ul>
 {% endif %}
 {% block content %}{% endblock %}

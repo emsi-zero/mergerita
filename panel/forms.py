@@ -68,3 +68,15 @@ class PresenceForm(forms.Form):
         required=False,
         max_length=settings.RMO_PRESENCE_NOTE_MAX_LENGTH,
     )
+
+
+class UrgencyRequestForm(forms.Form):
+    """The reason of an urgency request, 1 to the maximum length (URG-5)."""
+
+    reason = forms.CharField(max_length=settings.RMO_URGENCY_REASON_MAX_LENGTH)
+
+
+class UrgencyDecisionForm(forms.Form):
+    """The optional note of an urgency decision."""
+
+    note = forms.CharField(required=False)

@@ -1,0 +1,38 @@
+{% extends "panel/base.html" %}
+{% block content %}
+<div class="page-head">
+  <h1>Urgency requests</h1>
+</div>
+<div class="reviews">
+  {% for item in requests %}
+    <article class="review card">
+      <div class="review-head">
+        <div class="review-title">
+          <span class="mono muted">!{{ item.merge_request.iid }}</span>
+          <span class="strong">{{ item.merge_request.title }}</span>
+        </div>
+        {% if item.merge_request.web_url %}<a class="grow-end" href="{{ item.merge_request.web_url }}" target="_blank" rel="noopener noreferrer">Go to MR</a>{% endif %}
+      </div>
+      <div class="muted small review-meta">Author {{ item.requester.name }} · {{ item.reason }}</div>
+      {% if item.team_count is not None %}
+      <div class="muted small">{{ item.team.name }}: {{ item.team_count }} of {{ item.team.weekly_urgent_limit }} urgent requests approved in 7 days.</div>
+      {% if item.at_limit %}<div class="warning" role="alert">{{ item.team.name }} has reached its weekly urgent limit. You can still approve.</div>{% endif %}
+      {% endif %}
+      <div class="review-actions">
+        <form method="post" class="presence-form" action="{% url 'panel:urgency-approve' item.pk %}">
+          {% csrf_token %}
+          <input type="text" name="note" class="field" placeholder="Note (optional)" aria-label="Note">
+          <button type="submit" class="btn btn-primary">Approve</button>
+        </form>
+        <form method="post" class="presence-form" action="{% url 'panel:urgency-decline' item.pk %}">
+          {% csrf_token %}
+          <input type="text" name="note" class="field" placeholder="Note (optional)" aria-label="Note">
+          <button type="submit" class="btn btn-ghost-danger">Decline</button>
+        </form>
+      </div>
+    </article>
+  {% empty %}
+  <div class="card empty muted">No urgency requests to decide.</div>
+  {% endfor %}
+</div>
+{% endblock %}

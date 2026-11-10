@@ -16,6 +16,27 @@ urlpatterns = [
         views.MergeRequestDetailPanelView.as_view(),
         name="mr-detail",
     ),
+    path(
+        "mrs/<int:pk>/urgency/",
+        views.RequestUrgencyView.as_view(),
+        name="urgency-request",
+    ),
+    path(
+        "mrs/<int:pk>/urgency/withdraw/",
+        views.WithdrawUrgencyView.as_view(),
+        name="urgency-withdraw",
+    ),
+    path("urgency/", views.UrgencyRequestsView.as_view(), name="urgency"),
+    path(
+        "urgency/<int:pk>/approve/",
+        views.ApproveUrgencyView.as_view(),
+        name="urgency-approve",
+    ),
+    path(
+        "urgency/<int:pk>/decline/",
+        views.DeclineUrgencyView.as_view(),
+        name="urgency-decline",
+    ),
     path("reviews/", views.MyReviewsView.as_view(), name="reviews"),
     path(
         "reviews/<int:pk>/presence/",

@@ -20,18 +20,18 @@ Resume: Session 1 done: models and migration 0014 (all spec fields), Person.clea
 
 ## Session 2 — Urgency requests, approver resolution, the decision tab
 
-State: pending
-Covers: URG-5, URG-6, URG-7, URG-8, URG-9, URG-10, URG-11, URG-12, URG-13
+State: done
+Covers: URG-5, URG-6, URG-7, URG-8, URG-9, URG-10, URG-11, URG-12, URG-13, URG-26
 
-- [ ] T1 — `reviews/urgency.py`: `resolve_approver`, `request`, `withdraw`, `decline`, `approve` (decision, `urgent_at`, audit, notify and team-limit warning only; the booking effect comes in Session 3), `weekly_count` — URG-5..13
-- [ ] T2 — `RMO_URGENCY_REASON_MAX_LENGTH` in `orchestrator/settings.py` — URG-5
-- [ ] T3 — panel: the request and withdraw forms on My MRs, the "Urgency requests" tab (views, URLs, templates, and the tab shown only to deciders and admins) — URG-5, 7, 9, 10
-- [ ] T4 — tests in `reviews/tests/test_urgency.py` (URG-5..8, 11, 13; URG-6 and URG-12 as two-thread TransactionTestCases, checked by removing the MR lock and the status re-check) and `panel/tests/test_urgency_panel.py` (URG-9, URG-10, with anonymous, unlinked, author and someone-else cases)
+- [x] T1 — `reviews/urgency.py`: `resolve_approver`, `request`, `withdraw`, `decline`, `approve` (decision, `urgent_at`, audit, notify and team-limit warning only; the booking effect comes in Session 3), `weekly_count` — URG-5..13
+- [x] T2 — `RMO_URGENCY_REASON_MAX_LENGTH` in `orchestrator/settings.py` — URG-5
+- [x] T3 — panel: the request and withdraw forms on My MRs, the "Urgency requests" tab (views, URLs, templates, and the tab shown only to deciders and admins) — URG-5, 7, 9, 10
+- [x] T4 — tests in `reviews/tests/test_urgency.py` (URG-5..8, 11, 13; URG-6 and URG-12 as two-thread TransactionTestCases, checked by removing the MR lock and the status re-check) and `panel/tests/test_urgency_panel.py` (URG-9, URG-10, with anonymous, unlinked, author and someone-else cases)
 
 Gate A: `.claude/rmo/bin/rmo gate-a --session 2 --log "Session 2 Gate A"`
 Gate B: rmo-reviewer (spec, style, query) · rmo-deep-reviewer (logic, security; families LOCK, TX, AUTH, SEP)
 
-Resume: —
+Resume: Session 2 done: reviews/urgency.py (resolve_approver, request, withdraw, decline, approve, weekly_count, decidable_requests), panel forms/views/tab, tests; Gate A green. approve calls the empty _apply_urgency(merge_request) hook: Session 3 T3 fills it (URG-14); approve already refuses an MR that is no longer open (URG-26), so the booking effect never runs for a merged MR. No rights → 404; a lost race or a closed MR → error message and redirect. Gate B green after a delta re-review.
 
 ## Session 3 — Urgent booking
 

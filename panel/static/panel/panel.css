@@ -97,6 +97,7 @@ main { max-width: 1240px; margin: 0 auto; padding: 24px; }
 .warning { margin-top: 10px; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--warn-bg); color: var(--warn-fg); font-size: 13px; }
 .messages { list-style: none; margin: 0 0 16px; padding: 0; }
 .notice-ok { padding: 10px 12px; border-radius: var(--radius-sm); background: var(--ok-bg); color: var(--ok-fg); }
+.notice-err { padding: 10px 12px; border-radius: var(--radius-sm); background: var(--bad-bg); color: var(--bad-fg); }
 .errorlist { margin: 8px 0 0; padding: 0; list-style: none; color: var(--bad-fg); font-size: 13px; }
 
 /* Buttons and fields: one height, so a row of controls lines up. */
