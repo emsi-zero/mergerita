@@ -17,6 +17,12 @@
       "sha256": "db54aea7b93099143762080d5b5bae1ad6fb5173b58c80bc0cd18290a76afdcb",
       "approved_at": "2026-11-10T11:43:38+00:00",
       "note": ""
+    },
+    {
+      "spec": "2026-11-10-teams-reporting-lines-and-the-urgency-workflow",
+      "sha256": "c40c38a051bbbffa354abf195dc1d199c3f086207806eb9dda25bd8f0d39e865",
+      "approved_at": "2026-11-10T12:07:54+00:00",
+      "note": ""
     }
   ]
 }
