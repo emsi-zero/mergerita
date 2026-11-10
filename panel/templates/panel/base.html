@@ -30,6 +30,7 @@
       <div class="avatar" aria-hidden="true">{{ panel_initials }}</div>
       <div class="who-text">
         <div class="who-name">{{ panel_person.name }}</div>
+        {% if panel_team or panel_reports_to %}<div class="muted who-team">{% if panel_team %}{{ panel_team.name }}{% endif %}{% if panel_team and panel_reports_to %} · {% endif %}{% if panel_reports_to %}reports to {{ panel_reports_to.name }}{% endif %}</div>{% endif %}
         {% if panel_areas %}<div class="muted who-areas">{{ panel_areas|join:" · " }}</div>{% endif %}
       </div>
       {% else %}

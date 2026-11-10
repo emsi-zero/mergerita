@@ -51,6 +51,8 @@ def panel_header(request: HttpRequest) -> dict:
         ).count()
     return {
         "panel_person": person,
+        "panel_team": person.team,
+        "panel_reports_to": person.reports_to,
         "panel_initials": "".join(part[0] for part in person.name.split()[:2]).upper(),
         "panel_areas": list(
             CodeArea.objects.filter(ownership__person=person)

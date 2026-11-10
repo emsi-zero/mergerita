@@ -26,6 +26,34 @@ def default_working_days() -> list[int]:
     return list(settings.RMO_DEFAULT_WORKING_DAYS)
 
 
+class Team(models.Model):
+    """A group of people with a lead, an optional delegate and a weekly urgent limit."""
+
+    name = models.CharField(max_length=128, unique=True)
+    # PROTECT and SET_NULL act in Django, so deleting a lead is refused and a
+    # deleted delegate, team or manager leaves no reference to a missing row.
+    lead = models.ForeignKey(
+        "Person", on_delete=models.PROTECT, db_constraint=False, related_name="+"
+    )
+    delegate = models.ForeignKey(
+        "Person",
+        on_delete=models.SET_NULL,
+        db_constraint=False,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    weekly_urgent_limit = models.PositiveIntegerField(null=True, blank=True)
+
+    def __str__(self) -> str:
+        return self.name
+
+    def clean(self) -> None:
+        """The delegate must not be the lead (URG-3)."""
+        if self.delegate_id is not None and self.delegate_id == self.lead_id:
+            raise ValidationError({"delegate": "The delegate cannot be the lead."})
+
+
 class Person(models.Model):
     """A developer or admin known to the orchestrator, matched by GitLab user id."""
 
@@ -49,6 +77,37 @@ class Person(models.Model):
     )
     # None means the default limit of MergeRoutingSettings.
     daily_merge_limit = models.PositiveIntegerField(null=True, blank=True)
+    team = models.ForeignKey(
+        Team,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        db_constraint=False,
+        related_name="members",
+    )
+    reports_to = models.ForeignKey(
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        db_constraint=False,
+        related_name="reports",
+    )
+
+    def clean(self) -> None:
+        """Reject a reporting line that loops back to this person (URG-2)."""
+        chain = [self]
+        seen = {self.pk}
+        current = self.reports_to
+        while current is not None:
+            chain.append(current)
+            if current.pk == self.pk:
+                loop = " reports to ".join(person.name for person in chain)
+                raise ValidationError({"reports_to": f"Reporting loop: {loop}."})
+            if current.pk in seen:  # a loop elsewhere, not through this person
+                return
+            seen.add(current.pk)
+            current = current.reports_to
 
 
 class MergeRequestState(models.TextChoices):  # pylint: disable=too-many-ancestors
@@ -85,6 +144,8 @@ class MergeRequest(models.Model):
     web_url = models.URLField(max_length=500, null=True, blank=True)
     # When the MR last moved to `approved`. Null for MRs approved before it was recorded.
     approved_at = models.DateTimeField(null=True, blank=True)
+    # When an urgency request for the MR was approved. Null when it is not urgent.
+    urgent_at = models.DateTimeField(null=True, blank=True)
     # When the state last changed. Set by `save()` only (RBW-20).
     state_changed_at = models.DateTimeField(default=timezone.now, db_default=Now())
 
@@ -231,6 +292,9 @@ class ReviewSession(models.Model):
     )
     outcome_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(default=timezone.now, db_default=Now())
+    is_urgent = models.BooleanField(default=False, db_default=False)
+    # Minutes this booking put the reviewer's day over budget (urgent bookings only).
+    overage_minutes = models.PositiveIntegerField(default=0, db_default=0)
 
     class Meta:
         constraints = [
@@ -404,6 +468,7 @@ class MergeAssignment(models.Model):
         db_default=MergeViolation.NONE,
     )
     cancelled_at = models.DateTimeField(null=True, blank=True)
+    over_limit = models.BooleanField(default=False, db_default=False)
 
     class Meta:
         constraints = [
@@ -412,4 +477,68 @@ class MergeAssignment(models.Model):
                 condition=models.Q(merged_at__isnull=True, cancelled_at__isnull=True),
                 name="merge_assignment_one_open",
             )
+        ]
+
+
+class UrgencyRequestStatus(models.TextChoices):  # pylint: disable=too-many-ancestors
+    PENDING = "pending"
+    APPROVED = "approved"
+    DECLINED = "declined"
+    WITHDRAWN = "withdrawn"
+
+
+class UrgencyRequest(models.Model):
+    """A request to treat one MR as urgent. The approver is empty when admins decide."""
+
+    merge_request = models.ForeignKey(
+        MergeRequest,
+        on_delete=models.DO_NOTHING,
+        db_constraint=False,
+        related_name="urgency_requests",
+    )
+    requester = models.ForeignKey(
+        Person, on_delete=models.DO_NOTHING, db_constraint=False, related_name="+"
+    )
+    approver = models.ForeignKey(
+        Person,
+        on_delete=models.DO_NOTHING,
+        db_constraint=False,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    reason = models.TextField()
+    status = models.CharField(
+        max_length=16,
+        choices=UrgencyRequestStatus.choices,
+        default=UrgencyRequestStatus.PENDING,
+        db_default=UrgencyRequestStatus.PENDING,
+    )
+    note = models.TextField(blank=True, default="", db_default="")
+    decided_by = models.ForeignKey(
+        Person,
+        on_delete=models.DO_NOTHING,
+        db_constraint=False,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    created_at = models.DateTimeField(default=timezone.now, db_default=Now())
+    decided_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["merge_request"],
+                condition=models.Q(
+                    status__in=[
+                        UrgencyRequestStatus.PENDING,
+                        UrgencyRequestStatus.APPROVED,
+                    ]
+                ),
+                name="urgency_one_active",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["approver", "status"], name="urgency_approver_idx")
         ]

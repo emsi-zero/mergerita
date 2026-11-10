@@ -5,18 +5,18 @@ Checkpoint: `.claude/rmo/bin/rmo gate-a`
 
 ## Session 1 — Data model, teams and reporting lines
 
-State: pending
+State: done
 Covers: URG-1, URG-2, URG-3, URG-4
 
-- [ ] T1 — every model change of design.md "Data and migrations" in `reviews/models.py` (Team, Person.team and reports_to, UrgencyRequest with `urgency_one_active`, MergeRequest.urgent_at, ReviewSession.is_urgent and overage_minutes, MergeAssignment.over_limit), and migration `reviews/migrations/0014_teams_and_urgency.py` — URG-1
-- [ ] T2 — `Person.clean()` (no self, no cycle) and `Team.clean()` (the delegate is not the lead); the Team admin and the Person admin fields — URG-1, URG-2, URG-3
-- [ ] T3 — the team and "reports to" in the panel header (`panel/templates/panel/base.html`, context processor) — URG-4
-- [ ] T4 — tests in `reviews/tests/test_teams.py` (URG-1, 2, 3) and `panel/tests/test_header.py` (URG-4)
+- [x] T1 — every model change of design.md "Data and migrations" in `reviews/models.py` (Team, Person.team and reports_to, UrgencyRequest with `urgency_one_active`, MergeRequest.urgent_at, ReviewSession.is_urgent and overage_minutes, MergeAssignment.over_limit), and migration `reviews/migrations/0014_teams_and_urgency.py` — URG-1
+- [x] T2 — `Person.clean()` (no self, no cycle) and `Team.clean()` (the delegate is not the lead); the Team admin and the Person admin fields — URG-1, URG-2, URG-3
+- [x] T3 — the team and "reports to" in the panel header (`panel/templates/panel/base.html`, context processor) — URG-4
+- [x] T4 — tests in `reviews/tests/test_teams.py` (URG-1, 2, 3) and `panel/tests/test_header.py` (URG-4)
 
 Gate A: `.claude/rmo/bin/rmo gate-a --session 1 --log "Session 1 Gate A"`
 Gate B: rmo-reviewer (spec, style, query) · rmo-deep-reviewer (logic, security; families DATA, AUTH)
 
-Resume: —
+Resume: Session 1 done: models and migration 0014 (all spec fields), Person.clean and Team.clean, Team admin, header; Gate A green. Start Session 2 at T1 (reviews/urgency.py).
 
 ## Session 2 — Urgency requests, approver resolution, the decision tab
 

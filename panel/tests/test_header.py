@@ -15,6 +15,7 @@ from reviews.models import (
     Ownership,
     ReviewSession,
     ReviewSessionOutcome,
+    Team,
 )
 
 
@@ -107,3 +108,38 @@ class PanelHeaderTests(TestCase):
 
             self.assertEqual(response.context["tab_counts"], {"mrs": 0, "reviews": 0})
             self.assertNotContains(response, 'class="count"')
+
+    def test_urg_4_header_shows_the_team_and_who_i_report_to_when_set(self):
+        """URG-4: Given a person with a team and a manager, when they open a
+        panel page, then the header shows both; a person with neither sees
+        neither."""
+        # given
+        boss = create_person(1, "Boss Person", "boss")
+        me = create_person(2, "Me Person", "me")
+        loner = create_person(3, "Loner", "loner")
+        me.team = Team.objects.create(name="Web", lead=boss)
+        me.reports_to = boss
+        me.save()
+        panel_login(self.client, me.user)
+
+        # when
+        response = self.client.get("/panel/availability/")
+
+        # then
+        self.assertContains(response, "Web · reports to Boss Person")
+        with self.subTest("no team and no manager"):
+            panel_login(self.client, loner.user)
+
+            response = self.client.get("/panel/availability/")
+
+            self.assertNotContains(response, "reports to")
+            self.assertNotContains(response, "who-team")
+        with self.subTest("the team and the manager were deleted"):
+            Team.objects.all().delete()
+            boss.delete()
+            panel_login(self.client, me.user)
+
+            response = self.client.get("/panel/availability/")
+
+            self.assertEqual(response.status_code, 200)
+            self.assertNotContains(response, "reports to")

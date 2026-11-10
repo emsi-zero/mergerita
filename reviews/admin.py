@@ -16,6 +16,7 @@ from reviews.models import (
     Ownership,
     Person,
     RebookingSettings,
+    Team,
 )
 
 
@@ -52,9 +53,20 @@ class PersonAdmin(admin.ModelAdmin):
         "is_merge_owner",
         "merge_times",
         "daily_merge_limit",
+        "team",
+        "reports_to",
         "user",
     ]
-    raw_id_fields = ["user"]
+    raw_id_fields = ["user", "reports_to"]
+
+
+@admin.register(Team)
+class TeamAdmin(admin.ModelAdmin):
+    """Team admin: the lead, the delegate and the weekly urgent limit."""
+
+    list_display = ["name", "lead", "delegate", "weekly_urgent_limit"]
+    list_select_related = ["lead", "delegate"]
+    raw_id_fields = ["lead", "delegate"]
 
 
 @admin.register(MergeRoutingSettings)

@@ -86,8 +86,13 @@ the urgent rules (URG-25).
 
 One migration, `reviews/0014_teams_and_urgency.py`, with these changes:
 
-- `Team` (name, `lead` FK Person, `delegate` FK Person nullable, `weekly_urgent_limit` nullable).
-- `Person.team` (FK Team, nullable) and `Person.reports_to` (FK self, nullable).
+- `Team` (`name` unique, `lead` FK Person with `on_delete=PROTECT`, `delegate` FK Person nullable with `SET_NULL`, `weekly_urgent_limit` nullable).
+- `Person.team` (FK Team, nullable) and `Person.reports_to` (FK self, nullable), both with `on_delete=SET_NULL`.
+
+  PROTECT and SET_NULL act in Django (the FKs keep `db_constraint=False`). The
+  admin refuses to delete a person who leads a team, and deleting a team, a
+  delegate or a manager clears the references instead of leaving ids to
+  missing rows, which would make the panel header raise (Session 1 review M1).
 - `UrgencyRequest`, with partial unique constraint `urgency_one_active` on
   (merge_request) where status in (pending, approved), and an index on
   (approver, status) for the tab.
