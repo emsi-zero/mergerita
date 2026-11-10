@@ -61,3 +61,61 @@ Round 1: rmo-reviewer COMMENT (3 Medium: URG-10/URG-12 conflict, refusal flash i
 Fixes: redirect + message for a lost race, 404 only without rights; URG-26 check in approve; deterministic URG-12 test running the real withdraw/approve/decline (mutation-checked); one URG-5 test; notice-err style; team_status once per team; AUTH-5 subTests; request() re-reads state after the lock; weekly window midnight probe; missing approver falls back to admins.
 Accepted: two approvals for one team at the same instant can miss the over-limit alert (warn only).
 Delta re-review (deep-reviewer): APPROVE, all seven fixed, no new finding. Gate A green on three runs (142 passed, trace 10/10). Session 2 done.
+
+## 2026-11-10 12:56 UTC — Session 3 Gate A
+tests PASS (153 passed, 376 subtests passed in 49.51s) · lint FAIL (Your code has been rated at 9.99/10 (previous run: 10.00/10, -0.01)) · imports PASS (clean) · format FAIL (3 files would be reformatted, 124 files would be left unchanged.) · migrations PASS (clean) · trace PASS (11/11)
+Gate A: red
+
+## 2026-11-10 12:57 UTC — Session 3 Gate A
+tests PASS (153 passed, 376 subtests passed in 49.65s) · lint FAIL (Your code has been rated at 10.00/10 (previous run: 9.99/10, +0.00)) · imports PASS (clean) · format PASS (clean) · migrations PASS (clean) · trace PASS (11/11)
+Gate A: red
+
+## 2026-11-10 12:59 UTC — Session 3 Gate A
+tests PASS (153 passed, 376 subtests passed in 50.64s) · lint FAIL (Your code has been rated at 10.00/10 (previous run: 10.00/10, +0.00)) · imports PASS (clean) · format PASS (clean) · migrations PASS (clean) · trace PASS (11/11)
+Gate A: red
+
+## 2026-11-10 13:00 UTC — Session 3 Gate A
+tests PASS (153 passed, 376 subtests passed in 49.89s) · lint FAIL (Your code has been rated at 10.00/10 (previous run: 10.00/10, +0.00)) · imports PASS (clean) · format PASS (clean) · migrations PASS (clean) · trace PASS (11/11)
+Gate A: red
+
+## 2026-11-10 13:02 UTC — Session 3 Gate A
+tests PASS (153 passed, 376 subtests passed in 51.15s) · lint FAIL (Your code has been rated at 10.00/10 (previous run: 10.00/10, +0.00)) · imports PASS (clean) · format PASS (clean) · migrations PASS (clean) · trace PASS (11/11)
+Gate A: red
+
+## 2026-11-10 13:04 UTC — Session 3 Gate A
+tests PASS (153 passed, 376 subtests passed in 50.85s) · lint PASS (Your code has been rated at 10.00/10 (previous run: 10.00/10, +0.00)) · imports PASS (clean) · format PASS (clean) · migrations PASS (clean) · trace PASS (11/11)
+Gate A: green
+
+## 2026-11-10 13:05 UTC — Session 3 Gate A
+tests PASS (153 passed, 376 subtests passed in 51.51s) · lint PASS (Your code has been rated at 10.00/10 (previous run: 10.00/10, +0.00)) · imports PASS (clean) · format PASS (clean) · migrations PASS (clean) · trace PASS (11/11)
+Gate A: green
+
+## 2026-11-10 13:41 UTC — spec delta (developer approved)
+Session 3 review: URG-14 now moves pending sessions on any day other than today (later or overdue); URG-15 applies continuity only within the earliest day any eligible owner works, never moving the booking later (deep review H1); URG-18 sends one alert per approval listing the area reviews, one per later urgent booking that lands after today or does not fit, and none from the daily rebooking (RBW-10); added URG-27: with a pending or in-flight resolve_areas follow-up the approval only marks the MR urgent (the follow-up books urgently), otherwise it moves an awaiting_booking MR with no unbooked area review to in_review (deep review H2, the RBW-23 class).
+
+## 2026-11-10 13:41 UTC — spec approved
+sha256 c88c80f6cc24
+delta: URG-14, 15, 18 changed, URG-27 added
+
+## 2026-11-10 13:46 UTC — Session 3 Gate A (after review round 1)
+tests PASS (154 passed, 385 subtests passed in 62.93s (0:01:02)) · lint FAIL (Your code has been rated at 10.00/10 (previous run: 10.00/10, -0.00)) · imports PASS (clean) · format PASS (clean) · migrations PASS (clean) · trace PASS (12/12)
+Gate A: red
+
+## 2026-11-10 13:48 UTC — Session 3 Gate A (after review round 1)
+tests PASS (154 passed, 385 subtests passed in 60.34s (0:01:00)) · lint PASS (Your code has been rated at 10.00/10 (previous run: 10.00/10, +0.00)) · imports PASS (clean) · format PASS (clean) · migrations PASS (clean) · trace PASS (12/12)
+Gate A: green
+
+## 2026-11-10 13:49 UTC — Session 3 Gate A (after review round 1)
+tests PASS (154 passed, 385 subtests passed in 55.76s) · lint PASS (Your code has been rated at 10.00/10 (previous run: 10.00/10, +0.00)) · imports PASS (clean) · format PASS (clean) · migrations PASS (clean) · trace PASS (12/12)
+Gate A: green
+
+## 2026-11-10 13:55 UTC — Session 3 Gate A (after delta re-review fix)
+tests PASS (154 passed, 386 subtests passed in 61.67s (0:01:01)) · lint PASS (Your code has been rated at 10.00/10 (previous run: 10.00/10, +0.00)) · imports PASS (clean) · format PASS (clean) · migrations PASS (clean) · trace PASS (12/12)
+Gate A: green
+
+## 2026-11-10 13:56 UTC — Session 3 Gate B
+Round 1: rmo-reviewer COMMENT (3 Medium); rmo-deep-reviewer REQUEST_CHANGES (2 High: continuity booked a later day silently, URG-14/18; approval moved an awaiting_booking MR to in_review while resolve_areas was pending, leaving an area review with no session, the RBW-23 class; 3 Medium: overdue sessions kept, urgent alert ignored alert_on_no_fit, one alert per area review; 3 Low). All confirmed. Spec delta approved (URG-14, 15, 18 changed; URG-27 added).
+Fixes: _pick_slot prefer= within the earliest day; URG-27 guard; overdue sessions moved; one alert per approval, none from the rebooking; URG-25 in both orders; urgent reason text; overage boundary subTests.
+Delta re-review: all fixed; one new High: urgent book_follow_up could rebook the reviewer who handed back (SEP-1). Fixed: book_follow_up excludes every handed-back reviewer in both branches; URG-19 subTest, mutation-checked. Re-review: APPROVE.
+Accepted: the need-more-time urgent alert says 'no owner is available today' (wording only). Follow-up raised to the developer, outside this spec: outcomes.hand_back excludes only the current reviewer, not earlier hand-backs.
+Gate A green: 154 passed, trace 12/12. Session 3 done.

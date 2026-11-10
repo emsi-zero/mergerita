@@ -90,7 +90,7 @@ def retry_unbooked(
     summary lists what is still unbooked (RBW-10). An area review whose
     booking raises is logged and counted as still unbooked (RBW-9).
     """
-    eligible = _eligible().order_by(_oldest_wait_first(), "pk")
+    eligible = _eligible().order_by(_urgent_first(), _oldest_wait_first(), "pk")
     if merge_request_ids is not None:
         eligible = eligible.filter(merge_request_id__in=merge_request_ids)
     rows = list(eligible.values_list("pk", "merge_request_id"))
@@ -180,7 +180,7 @@ def _rebook_one(area_review_id: int, merge_request_id: int) -> bool | None:
         if area_review is None:
             return False
         area_review.merge_request = merge_request
-        if not _book(area_review):
+        if not book_with_continuity(area_review):
             return None
         if (
             state == MergeRequestState.AWAITING_BOOKING
@@ -192,8 +192,19 @@ def _rebook_one(area_review_id: int, merge_request_id: int) -> bool | None:
         return True
 
 
-def _book(area_review: AreaReview) -> bool:
-    """Try the previous reviewer first, then any eligible owner (RBW-4, RBW-5)."""
+def book_with_continuity(
+    area_review: AreaReview,
+    *,
+    alert_on_no_fit: bool = False,
+    urgent_notes: list[str] | None = None,
+) -> bool:
+    """Book with the previous reviewer first (RBW-4, RBW-5, URG-15).
+
+    A normal booking tries the previous reviewer across the horizon, then any
+    eligible owner. An urgent one makes one call that prefers the previous
+    reviewer only on the earliest day that fits, so continuity never delays it.
+    The caller owns the transaction and holds the MR lock and `lock_booking()`.
+    """
     sessions = list(area_review.sessions.order_by("created_at", "pk"))
     excluded = {
         session.reviewer_id
@@ -201,16 +212,26 @@ def _book(area_review: AreaReview) -> bool:
         if session.outcome == ReviewSessionOutcome.HANDED_BACK
     }
     continuation = bool(sessions)
-    if (
-        sessions
-        and sessions[-1].reviewer_id not in excluded
-        and booking.book_area_review(
+    previous = (
+        sessions[-1].reviewer
+        if sessions and sessions[-1].reviewer_id not in excluded
+        else None
+    )
+    if area_review.merge_request.urgent_at is not None:
+        return booking.book_area_review(
             area_review,
-            only_reviewer=sessions[-1].reviewer,
+            prefer=previous,
             exclude=excluded,
             continuation=continuation,
-            alert_on_no_fit=False,
+            alert_on_no_fit=alert_on_no_fit,
+            urgent_notes=urgent_notes,
         )
+    if previous is not None and booking.book_area_review(
+        area_review,
+        only_reviewer=previous,
+        exclude=excluded,
+        continuation=continuation,
+        alert_on_no_fit=False,
     ):
         return True
     return booking.book_area_review(
@@ -219,6 +240,11 @@ def _book(area_review: AreaReview) -> bool:
         continuation=continuation,
         alert_on_no_fit=False,
     )
+
+
+def _urgent_first() -> OrderBy:
+    """Order the area reviews of urgent MRs first (URG-21)."""
+    return F("merge_request__urgent_at").asc(nulls_last=True)
 
 
 def _oldest_wait_first() -> OrderBy:

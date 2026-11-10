@@ -11,12 +11,18 @@ from django.db.models import QuerySet
 from django.utils import timezone
 
 from audit.services import record
+from integrations.models import OutboxCall, OutboxStatus
+from reviews import area_resolver, booking, rebooking
 from reviews.alerts import queue_admin_alert, queue_notification
 from reviews.models import (
+    AreaReview,
+    AreaReviewState,
     Leave,
     MergeRequest,
     MergeRequestState,
     Person,
+    ReviewSession,
+    ReviewSessionOutcome,
     Team,
     UrgencyRequest,
     UrgencyRequestStatus,
@@ -258,7 +264,7 @@ def decline(person: Person, request_id: int, note: str, actor: str) -> None:
 def approve(person: Person, request_id: int, note: str, actor: str) -> None:
     """Approve a pending request: mark the MR urgent, tell the author, check the team limit.
 
-    URG-9, 12, 13. The booking effect is added in `_apply_urgency`.
+    URG-9, 12, 13. The booking effect is `_apply_urgency` (URG-14).
     """
     with transaction.atomic():
         merge_request, urgency, person = _lock_decidable(person, request_id)
@@ -285,8 +291,55 @@ def approve(person: Person, request_id: int, note: str, actor: str) -> None:
                 )
 
 
-def _apply_urgency(_merge_request: MergeRequest) -> None:
-    """Hook for the booking effect of an approval, called under the MR lock (URG-14).
+def _apply_urgency(merge_request: MergeRequest) -> None:
+    """Book today each area review that is unbooked or not booked today (URG-14, 17, 27).
 
-    Session 3 books today every area review of the MR here. It does nothing yet.
+    The caller holds the MR lock and has saved `urgent_at`. Lock order (INV-2):
+    `lock_booking()`, area reviews by pk, their sessions, then the capacity
+    rows inside the booking. An MR still in the AI gate, or with a pending
+    follow-up job, only keeps `urgent_at`: the resolver books it urgently
+    later (URG-19, 27). One alert lists the area reviews that are not booked
+    today (URG-18).
     """
+    if (
+        merge_request.state == MergeRequestState.AWAITING_BOOKING
+        and OutboxCall.objects.filter(
+            kind="resolve_areas",
+            status__in=(OutboxStatus.PENDING, OutboxStatus.IN_FLIGHT),
+            payload__merge_request_id=merge_request.pk,
+        ).exists()
+    ):
+        return
+    booking.lock_booking()
+    today = timezone.localdate()
+    notes: list[str] = []
+    area_reviews = (
+        AreaReview.objects.select_for_update(of=("self",))
+        .filter(merge_request=merge_request)
+        .exclude(state=AreaReviewState.APPROVED)
+        .order_by("pk")
+    )
+    for area_review in area_reviews:
+        area_review.merge_request = merge_request
+        if area_review.state == AreaReviewState.BOOKED:
+            session = (
+                ReviewSession.objects.select_for_update(of=("self",))
+                .filter(area_review=area_review, outcome=ReviewSessionOutcome.PENDING)
+                .first()
+            )
+            if session is None or session.day == today:
+                continue
+            booking.supersede_session(session)
+        rebooking.book_with_continuity(
+            area_review, alert_on_no_fit=True, urgent_notes=notes
+        )
+    if notes:
+        booking.queue_urgent_alert(merge_request, "\n".join(notes))
+    if (
+        merge_request.state == MergeRequestState.AWAITING_BOOKING
+        and merge_request.area_reviews.exists()
+        and not merge_request.area_reviews.filter(
+            state=AreaReviewState.UNBOOKED
+        ).exists()
+    ):
+        area_resolver.mark_in_review(merge_request)

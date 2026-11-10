@@ -78,6 +78,42 @@ class MyReviewsTests(TestCase):
         self.assertNotContains(response, "beyond reason")
         self.assertNotContains(response, "someone else reason")
 
+    def test_urg_22_lists_a_days_urgent_sessions_first_and_marks_them(self):
+        """URG-22: Given an older normal session and a newer urgent session on
+        one day, when I open My reviews, then the urgent one is listed first and
+        marked Urgent."""
+        # given
+        me = create_person(1, "Me", "me")
+        author = create_person(3, "Author Ann", "ann")
+        area = CodeArea.objects.create(name="payments", size_limit_lines=300)
+        today = timezone.localdate()
+        for iid, title, is_urgent in (
+            (1, "Normal review", False),
+            (2, "Rush review", True),
+        ):
+            review = book(
+                me,
+                create_merge_request(author, iid, title, MergeRequestState.IN_REVIEW),
+                area,
+                today,
+                "reason",
+            )
+            ReviewSession.objects.create(
+                area_review=review,
+                reviewer=me,
+                day=today,
+                slot_minutes=60,
+                is_urgent=is_urgent,
+            )
+        panel_login(self.client, me.user)
+
+        # when
+        response = self.client.get("/panel/reviews/")
+
+        # then
+        self.assertRegex(response.content.decode(), r"(?s)Rush review.*Normal review")
+        self.assertContains(response, "Urgent</span>", count=1)
+
     def test_mrv_3_go_to_mr_link_opens_in_new_tab_only_with_an_address(self):
         """MRV-3: Given a booked review whose MR has a web address and one whose
         MR has none, when I open My reviews, then the first shows a "Go to MR"

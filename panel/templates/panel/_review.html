@@ -3,6 +3,7 @@
     <div class="review-title">
       <span class="mono muted">!{{ review.merge_request.iid }}</span>
       <span class="strong">{{ review.merge_request.title }}</span>
+      {% if review.session_urgent %}<span class="chip">Urgent</span>{% endif %}
       {% if review.session_continuation %}<span class="chip">Follow-up</span>{% endif %}
       {% for area in review.areas.all %}<span class="mono chip">{{ area.name }}</span>{% endfor %}
     </div>

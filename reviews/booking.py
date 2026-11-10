@@ -17,11 +17,14 @@ from reviews.models import (
     CapacityDay,
     CodeArea,
     Leave,
+    MergeRequest,
     OwnerRole,
     Ownership,
     Person,
     ReviewSession,
     ReviewSessionOutcome,
+    UrgencyRequest,
+    UrgencyRequestStatus,
 )
 
 BOOKING_LOCK_KEY = 7_340_001
@@ -55,17 +58,26 @@ def book_area_review(  # pylint: disable=too-many-arguments,too-many-locals
     after_day: date | None = None,
     continuation: bool = False,
     alert_on_no_fit: bool = True,
+    urgent: bool | None = None,
+    prefer: Person | None = None,
+    urgent_notes: list[str] | None = None,
 ) -> bool:
     """Book a session of an area review. Return True when booked.
 
     Pick the earliest day in the horizon on which a code owner has a free slot,
-    then rank the owners of that day. `only_reviewer` narrows the candidates to
-    one person, `exclude` holds person ids that must not be booked, and
-    `after_day` skips that day and the days before it. The booking is a new
-    pending session, and the area review caches it (INV-1). A reviewer who
-    differs from the current one is set in GitLab and notified. When nothing
-    fits, an admin alert is queued (unless `alert_on_no_fit` is False), and a
-    booked area review becomes unbooked.
+    then rank the owners of that day. `urgent` (default: the MR is urgent)
+    drops only the free-slot check, so the first available owner day wins and
+    may go over budget (INV-4, URG-15). An urgent booking after today, or
+    with no fit, alerts the approver and the admins (URG-18), unless
+    `alert_on_no_fit` is False; with `urgent_notes` the alert text is appended
+    to that list for the caller to send once. `prefer` wins the earliest day
+    it fits, never moving the booking to a later day (URG-15).
+    `only_reviewer` narrows the candidates to one person, `exclude` holds
+    person ids that must not be booked, and `after_day` skips that day and the
+    days before it. The booking is a new pending session, and the area review
+    caches it (INV-1). A reviewer who differs from the current one is set in
+    GitLab and notified. When nothing fits, an admin alert is queued (unless
+    `alert_on_no_fit` is False), and a booked area review becomes unbooked.
     The caller owns the transaction and has no adapter call open (INV-5). The
     CapacityDay rows of the candidates stay locked until the caller commits.
     """
@@ -75,19 +87,33 @@ def book_area_review(  # pylint: disable=too-many-arguments,too-many-locals
     today = timezone.localdate()
     days = [today + timedelta(days=n) for n in range(settings.RMO_BOOKING_HORIZON_DAYS)]
     capacity = _lock_capacity(candidates, days)
-    pick = _pick_slot(candidates, capacity, days, after_day)
+    if urgent is None:
+        urgent = merge_request.urgent_at is not None
+    pick = _pick_slot(candidates, capacity, days, after_day, urgent, prefer)
     if pick is not None:
         candidate, row, free = pick
         if candidate.person.pk in barred:
             raise ValueError(
                 "The author or the previous reviewer cannot be booked (INV-4)."
             )
-        _book(area_review, candidate, row, free, continuation)
+        _book(area_review, candidate, row, free, continuation, urgent)
+        if urgent and alert_on_no_fit and row.day > today:
+            _urgent_alert(
+                merge_request,
+                f"no owner is available today; booked on {row.day}.",
+                urgent_notes,
+            )
         return True
 
     if area_review.state == AreaReviewState.BOOKED:
         _unbook(area_review)
-    if alert_on_no_fit:
+    if urgent and alert_on_no_fit:
+        _urgent_alert(
+            merge_request,
+            f"no owner fits within {settings.RMO_BOOKING_HORIZON_DAYS} days.",
+            urgent_notes,
+        )
+    elif alert_on_no_fit:
         queue_admin_alert(
             f"MR {merge_request.project_id}:{merge_request.iid}: no reviewer fits "
             f"within {settings.RMO_BOOKING_HORIZON_DAYS} days for area review {area_review.pk}."
@@ -95,13 +121,18 @@ def book_area_review(  # pylint: disable=too-many-arguments,too-many-locals
     return False
 
 
-def _pick_slot(
+def _pick_slot(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     candidates: list[_Candidate],
     capacity: dict[tuple[int, date], CapacityDay],
     days: list[date],
     after_day: date | None,
+    urgent: bool,
+    prefer: Person | None = None,
 ) -> tuple[_Candidate, CapacityDay, int] | None:
-    """Return the best candidate, row and free minutes on the earliest day that fits."""
+    """Return the best candidate, row and free minutes on the earliest day that fits.
+
+    `prefer` is chosen on that day when it fits, before the normal ranking.
+    """
     for day in days:
         if after_day is not None and day <= after_day:
             continue
@@ -111,7 +142,7 @@ def _pick_slot(
             if row is None:
                 continue
             free = person_budget(candidate.person) - row.booked_minutes
-            if free >= settings.RMO_SLOT_MINUTES:
+            if urgent or free >= settings.RMO_SLOT_MINUTES:
                 rank = (
                     TIER_RANK[candidate.tier],
                     -free,
@@ -120,7 +151,8 @@ def _pick_slot(
                 )
                 fits.append((rank, candidate, row, free))
         if fits:
-            _, candidate, row, free = min(fits, key=lambda fit: fit[0])
+            preferred = [fit for fit in fits if fit[1].person == prefer]
+            _, candidate, row, free = min(preferred or fits, key=lambda fit: fit[0])
             return candidate, row, free
     return None
 
@@ -135,21 +167,30 @@ def book_follow_up(area_review: AreaReview) -> bool:
     """
     session = area_review.sessions.filter(outcome=ReviewSessionOutcome.PENDING).first()
     if session is not None:
-        session.outcome = ReviewSessionOutcome.SUPERSEDED
-        session.outcome_at = timezone.now()
-        session.save(update_fields=["outcome", "outcome_at"])
-        release_session_minutes(session)
-        record(
-            "orchestrator",
-            "review_session.superseded",
-            session,
-            {"outcome": ReviewSessionOutcome.PENDING},
-            {"outcome": session.outcome},
-        )
+        supersede_session(session)
     previous_reviewer_id = area_review.reviewer_id
-    if not book_area_review(
-        area_review, only_reviewer=area_review.reviewer, continuation=True
-    ):
+    # A hand back is never undone by a follow-up (RBW-5, SEP-1).
+    handed_back = set(
+        area_review.sessions.filter(
+            outcome=ReviewSessionOutcome.HANDED_BACK
+        ).values_list("reviewer_id", flat=True)
+    )
+    if area_review.merge_request.urgent_at is not None:
+        # Urgent: the same reviewer only when they fit on the earliest day (URG-15).
+        booked = book_area_review(
+            area_review,
+            prefer=area_review.reviewer,
+            exclude=handed_back,
+            continuation=True,
+        )
+    else:
+        booked = book_area_review(
+            area_review,
+            only_reviewer=area_review.reviewer,
+            exclude=handed_back,
+            continuation=True,
+        )
+    if not booked:
         return False
     if area_review.reviewer_id != previous_reviewer_id:
         return True  # the booking itself told the new reviewer
@@ -159,6 +200,50 @@ def book_follow_up(area_review: AreaReview) -> bool:
         f"{area_review.booked_day.isoformat()}.",
     )
     return True
+
+
+def _urgent_alert(
+    merge_request: MergeRequest, text: str, notes: list[str] | None
+) -> None:
+    """Queue the URG-18 alert, or add its line to `notes` when the caller sends one alert."""
+    line = f"Urgent MR {merge_request.project_id}:{merge_request.iid}: {text}"
+    if notes is not None:
+        notes.append(line)
+    else:
+        queue_urgent_alert(merge_request, line)
+
+
+def queue_urgent_alert(merge_request: MergeRequest, text: str) -> None:
+    """Tell the approver of the MR's approved urgency request, and the admins (URG-18)."""
+    approval = (
+        UrgencyRequest.objects.filter(
+            merge_request=merge_request, status=UrgencyRequestStatus.APPROVED
+        )
+        .select_related("approver")
+        .first()
+    )
+    ids = {person.gitlab_user_id for person in Person.objects.filter(is_admin=True)}
+    if approval is not None and approval.approver is not None:
+        ids.add(approval.approver.gitlab_user_id)
+    queue_notification(sorted(ids), text)
+
+
+def supersede_session(session: ReviewSession) -> None:
+    """Close a pending session as superseded and release its minutes.
+
+    The caller owns the transaction and has called `lock_booking()`.
+    """
+    session.outcome = ReviewSessionOutcome.SUPERSEDED
+    session.outcome_at = timezone.now()
+    session.save(update_fields=["outcome", "outcome_at"])
+    release_session_minutes(session)
+    record(
+        "orchestrator",
+        "review_session.superseded",
+        session,
+        {"outcome": ReviewSessionOutcome.PENDING},
+        {"outcome": session.outcome},
+    )
 
 
 def release_session_minutes(session: ReviewSession) -> None:
@@ -308,12 +393,13 @@ def _unbook(area_review: AreaReview) -> None:
     )
 
 
-def _book(
+def _book(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     area_review: AreaReview,
     candidate: _Candidate,
     row: CapacityDay,
     free: int,
     continuation: bool,
+    urgent: bool,
 ) -> None:
     merge_request = area_review.merge_request
     reviewer_changed = candidate.person.pk != area_review.reviewer_id
@@ -325,16 +411,29 @@ def _book(
         ),
     }
     row.booked_minutes += settings.RMO_SLOT_MINUTES
+    overage = max(
+        0,
+        min(
+            settings.RMO_SLOT_MINUTES,
+            row.booked_minutes - person_budget(candidate.person),
+        ),
+    )
     row.budget_minutes = person_budget(candidate.person)
     row.save(update_fields=["booked_minutes", "budget_minutes"])
     area_review.state = AreaReviewState.BOOKED
     area_review.reviewer = candidate.person
     area_review.booked_day = row.day
     area_review.slot_minutes = settings.RMO_SLOT_MINUTES
-    area_review.reason = (
-        f"{candidate.tier} owner; {row.day.isoformat()}; "
-        f"{free} of {row.budget_minutes} minutes free"
-    )
+    if urgent and overage:
+        area_review.reason = (
+            f"{candidate.tier} owner; {row.day.isoformat()}; "
+            f"urgent, {overage} minutes over budget"
+        )
+    else:
+        area_review.reason = (
+            f"{candidate.tier} owner; {row.day.isoformat()}; "
+            f"{free} of {row.budget_minutes} minutes free"
+        )
     area_review.unbooked_since = None
     area_review.save(
         update_fields=[
@@ -354,6 +453,8 @@ def _book(
         reason=area_review.reason,
         is_continuation=continuation,
         outcome=ReviewSessionOutcome.PENDING,
+        is_urgent=urgent,
+        overage_minutes=overage if urgent else 0,
     )
     record(
         "orchestrator",

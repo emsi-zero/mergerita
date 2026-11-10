@@ -35,19 +35,19 @@ Resume: Session 2 done: reviews/urgency.py (resolve_approver, request, withdraw,
 
 ## Session 3 — Urgent booking
 
-State: pending
-Covers: URG-14, URG-15, URG-16, URG-17, URG-18, URG-19, URG-20, URG-21, URG-22, URG-24, URG-25
+State: done
+Covers: URG-14, URG-15, URG-16, URG-17, URG-18, URG-19, URG-20, URG-21, URG-22, URG-24, URG-25, URG-27
 
-- [ ] T1 — `booking.book_area_review(urgent=None)`: derive the flag, skip the budget check in `_pick_slot`, `overage_minutes` and `is_urgent` in `_book`, the URG-18 alert — URG-15, 16, 18, 19, 20
-- [ ] T2 — `rebooking`: make `_book` public as `book_with_continuity`, and take urgent MRs' area reviews first — URG-21
-- [ ] T3 — `urgency.approve`: the booking effect (supersede and release later-day sessions, `book_with_continuity` for each area review to move) inside the decision transaction — URG-14, 17
-- [ ] T4 — My reviews: urgent sessions first and marked — URG-22
-- [ ] T5 — tests in `reviews/tests/test_urgent_booking.py` (URG-14..21) and `panel/tests/test_reviews.py` (URG-22); URG-24 and URG-25 as two-thread TransactionTestCases, checked by removing the MR lock in approve and the `lock_booking()` ordering
+- [x] T1 — `booking.book_area_review(urgent=None)`: derive the flag, skip the budget check in `_pick_slot`, `overage_minutes` and `is_urgent` in `_book`, the URG-18 alert — URG-15, 16, 18, 19, 20
+- [x] T2 — `rebooking`: make `_book` public as `book_with_continuity`, and take urgent MRs' area reviews first — URG-21
+- [x] T3 — `urgency.approve`: the booking effect (supersede and release later-day sessions, `book_with_continuity` for each area review to move) inside the decision transaction — URG-14, 17
+- [x] T4 — My reviews: urgent sessions first and marked — URG-22
+- [x] T5 — tests in `reviews/tests/test_urgent_booking.py` (URG-14..21) and `panel/tests/test_reviews.py` (URG-22); URG-24 and URG-25 as two-thread TransactionTestCases, checked by removing the MR lock in approve and the `lock_booking()` ordering
 
 Gate A: `.claude/rmo/bin/rmo gate-a --session 3 --log "Session 3 Gate A"`
 Gate B: rmo-reviewer (spec, style, query) · rmo-deep-reviewer (logic, security; families LOCK, TX, SEP, IO)
 
-Resume: —
+Resume: Session 3 done: book_area_review(urgent=None) derives from urgent_at; booking.supersede_session (shared with book_follow_up) and booking._alert_urgent; rebooking.book_with_continuity (public) with urgent MRs first; urgency._apply_urgency under the MR lock + lock_booking (also moves an awaiting_booking MR to in_review when nothing stays unbooked); My reviews sorts and marks urgent. Tests: reviews/tests/test_urgent_booking.py (URG-14..21, 24, 25), panel/tests/test_reviews.py (URG-22). Gate A green. Session 4 starts at merge_router (URG-23) and docs.
 
 ## Session 4 — Urgent merge routing and docs
 

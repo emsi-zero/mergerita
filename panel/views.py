@@ -267,6 +267,7 @@ class MyReviewsView(PanelAccessMixin, TemplateView):
                 session_id=Subquery(latest.values("pk")[:1]),
                 session_outcome=Subquery(latest.values("outcome")[:1]),
                 session_continuation=Subquery(latest.values("is_continuation")[:1]),
+                session_urgent=Subquery(latest.values("is_urgent")[:1]),
             )
             .filter(
                 Q(booked_day__range=(today, last_day))
@@ -277,6 +278,7 @@ class MyReviewsView(PanelAccessMixin, TemplateView):
             )
             .order_by(
                 "booked_day",
+                F("session_urgent").desc(nulls_last=True),
                 F("session_continuation").desc(nulls_last=True),
                 "merge_request__opened_at",
                 "pk",
