@@ -76,3 +76,15 @@ kind: suppress
 applies-to: reviews/rebooking.py, reviews/admin.py
 rule: After the "Retry booking" admin action, the summary lists only the selected MRs' leftovers, and a selected MR with nothing to book counts as skipped (RBW-11). Do not flag the mixed MR and area-review units in the skipped count.
 source: RBW spec delta, 2026-11-08
+
+### M-no-progress-any-future-slot
+kind: suppress
+applies-to: reviews/watchdog.py
+rule: "No progress" leaves out an MR with any pending review session today or later, or any open merge window now or later (RWF-1, RWF-2), even when another area review of the same MR is stuck without a session. Still a defect: a past-only pending session that is not reported under "Missed slot" (RWF-3).
+source: RWF review, 2026-11-10
+
+### M-worker-guard-relies-on-restart
+kind: suppress
+applies-to: reviews/management/commands/run_worker.py, docker-compose.yml
+rule: `process_next_event` and `dispatch_due` stay unguarded on purpose: an error there (for example a dead connection) ends the worker, and `restart: unless-stopped` starts a fresh process. Only the scheduled jobs are guarded. Still a defect: guarding those two calls without handling a dead connection, which would make the loop spin.
+source: RWF review, 2026-11-10

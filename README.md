@@ -48,6 +48,8 @@ docker compose exec gitlab-mock python scripts/gitlab-mock --url http://127.0.0.
 
 Run every `docker compose` command from the project folder. Elsewhere it stops with "no configuration file provided".
 
+The web app and the worker restart by themselves when they stop (`restart: unless-stopped`). When a scheduled job in the worker (reconciliation, the merge retry, the rebooking or the watchdog) raises, the worker logs it, sends the admins one alert, and goes on with the inbox and the outbox. A job that keeps failing alerts again only after it has succeeded once. A daily job that failed does not run again that day. The database has no restart policy, so after a host reboot start the stack with `docker compose up -d`; until then the web app and the worker keep restarting.
+
 The image is built on the host network, because containers on the default bridge may have no DNS, and pip must reach PyPI. Only the build needs the internet.
 
 ## Run it
@@ -104,7 +106,7 @@ When no reviewer fits an area review, it stays `unbooked`. The worker tries agai
 1. *Daily run time* (default 07:30, `Asia/Tehran`). At or after this time the worker rebooks first, then runs the watchdog, once per day each. A worker that was down at the run time catches up at its first pass after it.
 2. Thresholds in working days (1 to 60): *AI review* (default 1), *Triage* (default 1) and *Stale* (default 5). An MR is reported when it has waited more than the threshold.
 3. The rebooking tries every unbooked area review, oldest wait first, with the normal booking rules. It prefers the previous reviewer, and never books the author or a person who handed the area review back. It sends one admin alert that lists the area reviews still without a reviewer. To rebook at once, for example after adding an owner, select the MRs in *Merge requests* and run the action *Retry booking*.
-4. The watchdog sends one admin alert, grouped by case: *No AI verdict* (the AI Reviewer did not answer), *Missed slot* (a booked day passed with no outcome; the reviewer also gets a chat message), *Needs triage* (no admin handled it) and *No progress* (no state change for any other reason). It changes nothing. An MR that stays stuck is reported again the next day. Unbooked area reviews, `waiting_on_author` MRs and approved MRs without a merge owner are left out, because other summaries report them. Scenarios P and Q in `docs/testing.md` have the steps.
+4. The watchdog sends one admin alert, grouped by case: *No AI verdict* (the AI Reviewer did not answer), *Missed slot* (a booked day passed with no outcome; the reviewer also gets a chat message), *Needs triage* (no admin handled it) and *No progress* (no state change for any other reason; an MR waiting for a review session booked today or later, or for a merge window now or later, is not stuck). It changes nothing. An MR that stays stuck is reported again the next day. Unbooked area reviews, `waiting_on_author` MRs and approved MRs without a merge owner are left out, because other summaries report them. Scenarios P and Q in `docs/testing.md` have the steps.
 
 ## Engineering workflow
 

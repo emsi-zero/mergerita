@@ -57,6 +57,7 @@ services:
   web:
     <<: *app
     command: python manage.py runserver 0.0.0.0:8000
+    restart: unless-stopped
     ports:
       - "${WEB_PORT:-8000}:8000"
     depends_on:
@@ -66,6 +67,7 @@ services:
   worker:
     <<: *app
     command: python manage.py run_worker
+    restart: unless-stopped
     depends_on:
       migrate:
         condition: service_completed_successfully

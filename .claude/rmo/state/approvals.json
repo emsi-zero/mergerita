@@ -11,6 +11,12 @@
       "sha256": "96c96088b7264e1d6e6c28c3dc367ba3c6ff2c8f6691329dccc70f6d48db8470",
       "approved_at": "2026-11-08T13:50:31+00:00",
       "note": "delta: add RBW-23, clarify RBW-11"
+    },
+    {
+      "spec": "2026-11-10-rbw-review-fixes-no-progress-exclusions-and-a-gu",
+      "sha256": "db54aea7b93099143762080d5b5bae1ad6fb5173b58c80bc0cd18290a76afdcb",
+      "approved_at": "2026-11-10T11:43:38+00:00",
+      "note": ""
     }
   ]
 }

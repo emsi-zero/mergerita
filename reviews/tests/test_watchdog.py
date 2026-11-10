@@ -360,3 +360,76 @@ class WatchdogConcurrencyTest(TransactionTestCase):
         self.assertEqual(len(notify_texts()), 1)
         with self.subTest("a second pass the same day"):
             self.assertIsNone(watchdog.run_daily_watchdog(NOW + timedelta(hours=8)))
+
+
+class NoProgressWaitingTest(TestCase):
+    """RWF: an MR waiting for a booked future slot is not stuck."""
+
+    def setUp(self) -> None:
+        self.author = person(11)
+        self.reviewer = person(21)
+        claim_rebooking()
+
+    def test_rwf_1_no_progress_skips_an_mr_with_a_session_today_or_later(
+        self,
+    ) -> None:
+        """RWF-1: Given in_review MRs unchanged for weeks, when one has a
+        pending session today and one on a later day, then neither is reported
+        under "No progress"; an MR with no session still is."""
+        # given
+        today_mr = stuck_mr(self.author, 1, MergeRequestState.IN_REVIEW, local(10, 20))
+        later_mr = stuck_mr(self.author, 2, MergeRequestState.IN_REVIEW, local(10, 20))
+        stuck_mr(self.author, 3, MergeRequestState.IN_REVIEW, local(10, 20))
+        booked_session(today_mr, self.reviewer, NOW.date())
+        booked_session(later_mr, self.reviewer, date(2026, 11, 7))
+
+        # when
+        counts = watchdog.run_daily_watchdog(NOW)
+
+        # then
+        self.assertEqual(counts["no_progress"], 1)
+        self.assertEqual(counts["missed_slot"], 0)
+        self.assertIn("No progress (1):\n7:3 MR 3", notify_texts()[0])
+
+    def test_rwf_2_no_progress_skips_an_mr_with_a_merge_window_now_or_later(
+        self,
+    ) -> None:
+        """RWF-2: Given approved MRs unchanged for weeks, when one has an open
+        merge assignment with a window later today, then it is not reported
+        under "No progress"; one whose window has passed still is."""
+        # given
+        waiting = stuck_mr(self.author, 1, MergeRequestState.APPROVED, local(10, 20))
+        missed = stuck_mr(self.author, 2, MergeRequestState.APPROVED, local(10, 20))
+        MergeAssignment.objects.create(
+            merge_request=waiting, window=NOW + timedelta(hours=2)
+        )
+        MergeAssignment.objects.create(
+            merge_request=missed, window=NOW - timedelta(days=1)
+        )
+
+        # when
+        counts = watchdog.run_daily_watchdog(NOW)
+
+        # then
+        self.assertEqual(counts["no_progress"], 1)
+        self.assertIn("No progress (1):\n7:2 MR 2", notify_texts()[0])
+
+    def test_rwf_3_a_past_only_session_is_a_missed_slot_not_no_progress(
+        self,
+    ) -> None:
+        """RWF-3: Given an in_review MR unchanged for weeks whose only pending
+        session was on a past day, when the watchdog runs, then it is reported
+        under "Missed slot" and not under "No progress"."""
+        # given
+        merge_request = stuck_mr(
+            self.author, 1, MergeRequestState.IN_REVIEW, local(10, 20)
+        )
+        booked_session(merge_request, self.reviewer, date(2026, 11, 2))
+
+        # when
+        counts = watchdog.run_daily_watchdog(NOW)
+
+        # then
+        self.assertEqual(counts["missed_slot"], 1)
+        self.assertEqual(counts["no_progress"], 0)
+        self.assertNotIn("No progress", notify_texts()[0])

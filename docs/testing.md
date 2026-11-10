@@ -287,6 +287,7 @@ This raises `AuditImmutableError`.
 3. Missed slot: book an MR, then move the session's day to a past working day. Needs triage: do the same with an MR in `needs_triage` and an earlier *State changed at*.
 4. Run the worker after the rebooking has run that day. *Audit events* has one `watchdog.run` with a count per case. The admin gets one alert "Stuck MRs (N):" grouped by case, and the reviewer of the missed slot gets "Your review of MR ... has no outcome.". A second pass the same day does nothing.
 5. The next day, the same MRs are reported again. A `waiting_on_author` MR, an unbooked area review and an approved MR without a merge owner are never listed.
+6. Waiting is not stuck (RWF): move an `in_review` MR's *State changed at* back by two weeks, but leave its review session booked on a future day. It is not listed under *No progress*. Move the session's day to the past: it is listed under *Missed slot*, still not under *No progress*.
 
 ---
 

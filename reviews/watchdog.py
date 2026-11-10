@@ -58,13 +58,14 @@ def run_daily_watchdog(now: datetime | None = None) -> dict[str, int] | None:
     """
     if not claim_day("last_watchdog_on", _is_due, now):
         return None
-    return _report(RebookingSettings.load(), timezone.localdate(now))
+    return _report(RebookingSettings.load(), now or timezone.now())
 
 
-def _report(settings_row: RebookingSettings, today: date) -> dict[str, int]:
+def _report(settings_row: RebookingSettings, now: datetime) -> dict[str, int]:
+    today = timezone.localdate(now)
     found: list[tuple[str, str, list[Finding]]] = []
     listed: set[int] = set()
-    for key, label, finder in _cases(listed):
+    for key, label, finder in _cases(listed, now):
         findings = finder(settings_row, today)
         listed.update(finding.merge_request.pk for finding in findings)
         found.append((key, label, findings))
@@ -92,7 +93,7 @@ def _remind(findings: list[Finding]) -> None:
 
 
 def _cases(
-    listed: set[int],
+    listed: set[int], now: datetime
 ) -> list[tuple[str, str, Callable[[RebookingSettings, date], list[Finding]]]]:
     """The cases in report order. `listed` fills as they run, for the catch-all."""
     return [
@@ -102,7 +103,7 @@ def _cases(
         (
             "no_progress",
             "No progress",
-            lambda row, today: _no_progress(row, today, listed),
+            lambda row, today: _no_progress(row, today, now, listed),
         ),
     ]
 
@@ -159,13 +160,21 @@ def _needs_triage(row: RebookingSettings, today: date) -> list[Finding]:
 
 
 def _no_progress(
-    row: RebookingSettings, today: date, listed: set[int]
+    row: RebookingSettings, today: date, now: datetime, listed: set[int]
 ) -> list[Finding]:
+    """The catch-all (RBW-16). An MR waiting for a booked future slot, a review
+    session today or later (RWF-1) or a merge window now or later (RWF-2), is
+    not stuck."""
     open_assignment = MergeAssignment.objects.filter(
         merge_request=OuterRef("pk"), merged_at__isnull=True, cancelled_at__isnull=True
     )
     unbooked = AreaReview.objects.filter(
         merge_request=OuterRef("pk"), state=AreaReviewState.UNBOOKED
+    )
+    future_session = ReviewSession.objects.filter(
+        area_review__merge_request=OuterRef("pk"),
+        outcome=ReviewSessionOutcome.PENDING,
+        day__gte=today,
     )
     candidates = (
         MergeRequest.objects.exclude(
@@ -173,6 +182,8 @@ def _no_progress(
         )
         .exclude(Q(state=MergeRequestState.APPROVED) & ~Exists(open_assignment))
         .exclude(Exists(unbooked))
+        .exclude(Exists(future_session))
+        .exclude(Exists(open_assignment.filter(window__gte=now)))
         .exclude(pk__in=listed)
         .order_by("pk")
     )
