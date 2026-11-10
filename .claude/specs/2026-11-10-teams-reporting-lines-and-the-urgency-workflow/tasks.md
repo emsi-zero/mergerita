@@ -1,6 +1,6 @@
 # TASKS: Teams, reporting lines and the urgency workflow
 
-Spec: spec.md · Key: URG · Route: project · State: pending
+Spec: spec.md · Key: URG · Route: project · State: done
 Checkpoint: `.claude/rmo/bin/rmo gate-a`
 
 ## Session 1 — Data model, teams and reporting lines
@@ -51,14 +51,14 @@ Resume: Session 3 done: book_area_review(urgent=None) derives from urgent_at; bo
 
 ## Session 4 — Urgent merge routing and docs
 
-State: pending
+State: done
 Covers: URG-23
 
-- [ ] T1 — `merge_router.assign_merge(urgent=None)`: derive the flag, ignore the daily merge limit, record `over_limit`; `urgency.approve` re-routes an approved MR's later-day assignment — URG-23
-- [ ] T2 — test URG-23 in `reviews/tests/test_urgent_booking.py`
-- [ ] T3 — docs: `docs/testing.md` scenario R, README "Teams and urgency", and INVARIANTS.md (SEP-3, AUTH-7, next letter S)
+- [x] T1 — `merge_router.assign_merge(urgent=None)`: derive the flag, ignore the daily merge limit, record `over_limit`; `urgency.approve` re-routes an approved MR's later-day assignment — URG-23
+- [x] T2 — test URG-23 in `reviews/tests/test_urgent_booking.py`
+- [x] T3 — docs: `docs/testing.md` scenario R, README "Teams and urgency", and INVARIANTS.md (SEP-3, AUTH-7, next letter S)
 
 Gate A: `.claude/rmo/bin/rmo gate-a --session 4 --log "Session 4 Gate A"`
 Gate B: rmo-reviewer (spec, style, query) · rmo-deep-reviewer (logic, security; families LOCK, SEP)
 
-Resume: —
+Resume: Session 4 done: assign_merge(urgent=None) derives from urgent_at, ignores only the daily merge limit and sets over_limit; urgency._apply_urgency cancels a later-day assignment and routes an approved MR today (MR lock + lock_booking). Test URG-23 in test_urgent_booking.py. Docs: testing.md scenario R, README Teams and urgency, INVARIANTS SEP-3, AUTH-7, next letter S. Gate B next.

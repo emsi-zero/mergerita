@@ -87,6 +87,7 @@ same change, with its source.
   hand-back never books the same reviewer again. [RMO INV-2, RVO INV-4]
 - **SEP-2** A merge owner is never the author or a current reviewer of the
   MR. [MRG INV-2]
+- **SEP-3** An urgency request is never decided by its author. [URG]
 
 ## AUTH — panel and admin
 
@@ -101,6 +102,7 @@ same change, with its source.
   through `reviews` services: presence, outcomes, availability. [DVP INV-3]
 - **AUTH-5 Every POST endpoint has an anonymous test and an unlinked-user test.**
 - **AUTH-6 The SSO stub never calls `login()`.** [PAU INV-2]
+- **AUTH-7 Urgency decisions are scoped to the request's approver or an admin.** Anyone else gets 404. [URG]
 
 ## DATA — data and time
 
@@ -123,7 +125,7 @@ same change, with its source.
 
 - Each feature adds or extends a lettered scenario in `docs/testing.md` §4. A
   scenario that was not run by hand is marked "(unverified)". The existing
-  scenarios are A–Q (O = merge routing, O.8–9 = retry, P = daily rebooking, Q = watchdog), so the next new one is **R**.
+  scenarios are A–R (O = merge routing, O.8–9 = retry, P = daily rebooking, Q = watchdog, R = urgency), so the next new one is **S**.
 - A new GitLab field or assumption adds a smoke-test item in `docs/testing.md` §6 (1–17 so far).
 - A behaviour an admin or developer sees gets a README section. Architecture
   changes go into `docs/architecture-design.md`.

@@ -108,6 +108,16 @@ When no reviewer fits an area review, it stays `unbooked`. The worker tries agai
 3. The rebooking tries every unbooked area review, oldest wait first, with the normal booking rules. It prefers the previous reviewer, and never books the author or a person who handed the area review back. It sends one admin alert that lists the area reviews still without a reviewer. To rebook at once, for example after adding an owner, select the MRs in *Merge requests* and run the action *Retry booking*.
 4. The watchdog sends one admin alert, grouped by case: *No AI verdict* (the AI Reviewer did not answer), *Missed slot* (a booked day passed with no outcome; the reviewer also gets a chat message), *Needs triage* (no admin handled it) and *No progress* (no state change for any other reason; an MR waiting for a review session booked today or later, or for a merge window now or later, is not stuck). It changes nothing. An MR that stays stuck is reported again the next day. Unbooked area reviews, `waiting_on_author` MRs and approved MRs without a merge owner are left out, because other summaries report them. Scenarios P and Q in `docs/testing.md` have the steps.
 
+### Teams and urgency
+
+An author can ask for an urgent review and merge. Set it up in the admin.
+
+1. *Team*: a name, a lead, a delegate and a weekly urgent limit (empty means none). In *Person*, set each member's *Team* and *Reports to*.
+2. The request is decided by the author's *Reports to* person. When that person is on leave, the delegate of their team decides. When the delegate is on leave too, or there is none, the person one level up decides, and so on. When nobody is left, any admin decides. The author never decides their own request.
+3. Approval books the MR's area reviews today, over the reviewer's daily review budget if needed. The overage is stored on the session. An approved MR with a merge window on a later day gets the earliest window from now, over the merge owner's daily merge limit if needed. `over_limit` is stored on the assignment.
+4. Urgency never overrides leave, working days, the author, a current reviewer as merge owner, or a reviewer who handed the area review back.
+5. The reason of a request is at most `RMO_URGENCY_REASON_MAX_LENGTH` characters (default 500). The weekly limit counts the team's approved requests in the last 7 local days. It only warns: past it, the approval goes through and the admins get an alert. Scenario R in `docs/testing.md` has the steps.
+
 ## Engineering workflow
 
 Changes here follow the project's own spec-driven workflow in `.claude/rmo/` (start with `.claude/rmo/WORKFLOW.md`). In Claude Code, run `/rmo <request>`. Every route runs its checks through `.claude/rmo/bin/rmo`. On the task and project routes, the developer approves a spec before any code is written. `rmo gate-a` runs the tests, pylint, isort, black, `makemigrations --check`, and the criterion-to-test trace in one command.

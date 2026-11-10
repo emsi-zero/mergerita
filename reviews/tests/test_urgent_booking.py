@@ -13,13 +13,22 @@ from audit.models import AuditEvent
 from integrations import outbox
 from integrations.fakes import FakeGitLabGateway
 from integrations.models import OutboxCall
-from reviews import area_resolver, booking, outcomes, rebooking, urgency
+from reviews import (
+    area_resolver,
+    booking,
+    merge_retry,
+    merge_router,
+    outcomes,
+    rebooking,
+    urgency,
+)
 from reviews.models import (
     AreaReview,
     AreaReviewState,
     CapacityDay,
     CodeArea,
     Leave,
+    MergeAssignment,
     MergeRequest,
     MergeRequestState,
     OwnerRole,
@@ -643,6 +652,182 @@ class UrgentBookingTests(TestCase):
         self.assertEqual(urgent_review.booked_day, MONDAY)
         self.assertEqual(old.booked_day, TUESDAY)
 
+    def test_urg_23_urgent_merge_routing_ignores_only_the_daily_limit(
+        self,
+    ):  # pylint: disable=too-many-locals,too-many-statements
+        """URG-23: Given urgent approved MRs, when they are routed, then the
+        earliest window from now is taken over the daily limit with over_limit
+        set, the other rules still apply, an open assignment on another day than
+        today is replaced on approval, and a non-urgent MR stays under the limit."""
+        now = timezone.make_aware(
+            timezone.datetime.combine(MONDAY, timezone.datetime.min.time())
+        ).replace(hour=8)
+        patcher = mock.patch.object(timezone, "now", return_value=now)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+        def approved_mr(iid: int, urgent: bool) -> MergeRequest:
+            return MergeRequest.objects.create(
+                project_id=7,
+                iid=iid,
+                author=self.author,
+                title="MR",
+                state=MergeRequestState.APPROVED,
+                urgent_at=now if urgent else None,
+            )
+
+        def route(merge_request: MergeRequest, **kwargs: object):
+            with transaction.atomic():
+                booking.lock_booking()
+                return merge_router.assign_merge(merge_request, **kwargs)
+
+        def owner(user_id: int, **fields: object) -> Person:
+            return person(
+                user_id,
+                is_merge_owner=True,
+                merge_times=["10:00", "15:00"],
+                daily_merge_limit=1,
+                **fields,
+            )
+
+        def fill_today(merge_owner: Person) -> None:
+            MergeAssignment.objects.create(
+                merge_request=approved_mr(900 + merge_owner.pk, False),
+                merge_owner=merge_owner,
+                window=now.replace(hour=15),
+            )
+
+        with self.subTest("over the limit today, earliest window"):
+            # given
+            full = owner(31)
+            fill_today(full)
+            # when
+            assignment = route(approved_mr(1, True))
+            # then
+            self.assertEqual(assignment.merge_owner, full)
+            self.assertEqual(timezone.localtime(assignment.window).hour, 10)
+            self.assertTrue(assignment.over_limit)
+        MergeAssignment.objects.all().delete()
+        Person.objects.filter(is_merge_owner=True).delete()
+
+        with self.subTest("author and reviewer are never chosen"):
+            # given
+            self.author.is_merge_owner = True
+            self.author.merge_times = ["10:00"]
+            self.author.save()
+            reviewer = owner(32)
+            other = owner(33)
+            fill_today(other)
+            urgent_mr = approved_mr(2, True)
+            AreaReview.objects.create(
+                merge_request=urgent_mr,
+                reviewer=reviewer,
+                state=AreaReviewState.APPROVED,
+            )
+            # when
+            assignment = route(urgent_mr)
+            # then
+            self.assertEqual(assignment.merge_owner, other)
+        Person.objects.filter(pk=self.author.pk).update(is_merge_owner=False)
+        MergeAssignment.objects.all().delete()
+        Person.objects.filter(is_merge_owner=True).delete()
+
+        with self.subTest("an owner on leave today is not chosen"):
+            # given
+            away = owner(34)
+            present = owner(35)
+            Leave.objects.create(person=away, start_date=MONDAY, end_date=MONDAY)
+            fill_today(present)
+            # when
+            assignment = route(approved_mr(3, True))
+            # then
+            self.assertEqual(assignment.merge_owner, present)
+        MergeAssignment.objects.all().delete()
+        Person.objects.filter(is_merge_owner=True).delete()
+
+        tuesday_ten = timezone.make_aware(
+            timezone.datetime.combine(TUESDAY, timezone.datetime.min.time())
+        ).replace(hour=10)
+        cases = (
+            ("later day", tuesday_ten, True),
+            ("missed earlier today", now.replace(hour=7), False),
+            ("yesterday, missed", now - timedelta(days=1), True),
+            ("00:30 today", now.replace(hour=0, minute=30), False),
+            (
+                "23:30 yesterday",
+                now.replace(hour=0, minute=30) - timedelta(hours=1),
+                True,
+            ),
+        )
+        for name, window, replaced in cases:
+            with self.subTest(f"open assignment {name}"):
+                # given
+                merge_owner = owner(36)
+                merge_request = approved_mr(4, False)
+                open_one = MergeAssignment.objects.create(
+                    merge_request=merge_request,
+                    merge_owner=merge_owner,
+                    window=window,
+                )
+                pk = UrgencyRequest.objects.create(
+                    merge_request=merge_request,
+                    requester=self.author,
+                    approver=self.boss,
+                    reason="Release blocker",
+                ).pk
+                # when
+                urgency.approve(self.boss, pk, "", "user:boss")
+                # then
+                open_one.refresh_from_db()
+                current = MergeAssignment.objects.get(
+                    merge_request=merge_request, cancelled_at__isnull=True
+                )
+                if replaced:
+                    self.assertIsNotNone(open_one.cancelled_at)
+                    self.assertNotEqual(current.pk, open_one.pk)
+                    self.assertEqual(timezone.localtime(current.window).date(), MONDAY)
+                else:
+                    self.assertEqual(current.pk, open_one.pk)
+            MergeRequest.objects.filter(pk=merge_request.pk).delete()
+            Person.objects.filter(is_merge_owner=True).delete()
+
+        with self.subTest("the retry routes an urgent MR over the limit"):
+            # given
+            full = owner(38)
+            fill_today(full)
+            urgent_mr = approved_mr(6, True)
+            # when
+            merge_retry.retry_unassigned("admin", [urgent_mr.pk])
+            # then
+            assignment = MergeAssignment.objects.get(merge_request=urgent_mr)
+            self.assertEqual(assignment.merge_owner, full)
+            self.assertTrue(assignment.over_limit)
+        MergeAssignment.objects.all().delete()
+        Person.objects.filter(is_merge_owner=True).delete()
+
+        with self.subTest("a normal MR after an urgent over-limit one"):
+            # given
+            full = owner(39)
+            fill_today(full)
+            route(approved_mr(7, True))
+            # when
+            assignment = route(approved_mr(8, False))
+            # then
+            self.assertNotEqual(timezone.localtime(assignment.window).date(), MONDAY)
+            self.assertFalse(assignment.over_limit)
+        MergeAssignment.objects.all().delete()
+        Person.objects.filter(is_merge_owner=True).delete()
+
+        with self.subTest("a non-urgent MR is not assigned over the limit"):
+            # given
+            full = owner(37)
+            fill_today(full)
+            # when
+            assignment = route(approved_mr(5, False))
+            # then
+            self.assertNotEqual(timezone.localtime(assignment.window).date(), MONDAY)
+            self.assertFalse(assignment.over_limit)
+
 
 class ApprovalRaceTests(TransactionTestCase):
     def setUp(self) -> None:
@@ -716,7 +901,7 @@ class ApprovalRaceTests(TransactionTestCase):
         lock, in either order), then it has one pending session today, not
         with the reviewer who handed it back. The booking lock is what keeps
         the capacity rows in one order (LOCK-1, LOCK-3); the MR lock is proven
-        by URG-12."""
+        by the decision race test in test_urgency.py."""
         for name, hand_back_first in (
             ("approval_first", False),
             ("hand_back_first", True),

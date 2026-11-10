@@ -119,3 +119,27 @@ Fixes: _pick_slot prefer= within the earliest day; URG-27 guard; overdue session
 Delta re-review: all fixed; one new High: urgent book_follow_up could rebook the reviewer who handed back (SEP-1). Fixed: book_follow_up excludes every handed-back reviewer in both branches; URG-19 subTest, mutation-checked. Re-review: APPROVE.
 Accepted: the need-more-time urgent alert says 'no owner is available today' (wording only). Follow-up raised to the developer, outside this spec: outcomes.hand_back excludes only the current reviewer, not earlier hand-backs.
 Gate A green: 154 passed, trace 12/12. Session 3 done.
+
+## 2026-11-10 14:00 UTC — Session 4 Gate A
+tests PASS (155 passed, 391 subtests passed in 73.61s (0:01:13)) · lint FAIL (Your code has been rated at 10.00/10 (previous run: 10.00/10, -0.00)) · imports PASS (clean) · format FAIL (1 file would be reformatted, 126 files would be left unchanged.) · migrations PASS (clean) · trace PASS (1/1)
+Gate A: red
+
+## 2026-11-10 14:02 UTC — Session 4 Gate A
+tests PASS (155 passed, 391 subtests passed in 71.64s (0:01:11)) · lint PASS (Your code has been rated at 10.00/10 (previous run: 10.00/10, +0.00)) · imports PASS (clean) · format PASS (clean) · migrations PASS (clean) · trace PASS (1/1)
+Gate A: green
+
+## 2026-11-10 14:09 UTC — Session 4 Gate A (after review round 1)
+tests FAIL (1 failed, 154 passed, 396 subtests passed in 65.09s (0:01:05)) · lint PASS (Your code has been rated at 10.00/10 (previous run: 10.00/10, +0.00)) · imports PASS (clean) · format PASS (clean) · migrations PASS (clean) · trace PASS (27/27)
+Gate A: red
+
+## 2026-11-10 14:11 UTC — Session 4 Gate A (after review round 1)
+tests PASS (155 passed, 397 subtests passed in 71.43s (0:01:11)) · lint PASS (Your code has been rated at 10.00/10 (previous run: 10.00/10, +0.00)) · imports PASS (clean) · format PASS (clean) · migrations PASS (clean) · trace PASS (27/27)
+Gate A: green
+
+## 2026-11-10 14:14 UTC — Session 4 Gate B
+rmo-reviewer COMMENT (Lows: scenario R wrong tab and no decline step; README missing the reason-length setting and the 7-day definition; urgent signature differs from Contracts). rmo-deep-reviewer COMMENT (2 Medium: a missed past-day merge assignment was kept, URG-23 says from now; test gaps; 3 Low).
+Fixed: keep only an open assignment dated today, cancel and re-route later and missed ones (mutation-checked); URG-23 subTests for today stays, yesterday missed, midnight probes, merge_retry derived flag, a normal MR after an over-limit day; scenario R and README fixed; test date built from TUESDAY. No re-review (no Critical or High).
+Recorded: Contracts say urgent: bool = False for book_area_review and assign_merge; the code uses urgent: bool | None = None (None derives from urgent_at), as design.md states.
+Accepted: a cancel followed by no fit leaves the MR to the daily merge retry; a re-route can return the same owner and window (two chat messages).
+Observed once: tests_e2e test_approved_merge_request_gets_reviewers_in_the_mock failed with a GitLabError transport error from the mock; passed on 6 later runs, no gateway or mock change in this spec.
+Gate A green: 155 passed, trace 27/27. Session 4 done.

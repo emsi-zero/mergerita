@@ -19,7 +19,10 @@ from reviews.models import (
 
 
 def assign_merge(
-    merge_request: MergeRequest, *, alert_on_no_fit: bool = True
+    merge_request: MergeRequest,
+    *,
+    alert_on_no_fit: bool = True,
+    urgent: bool | None = None,
 ) -> MergeAssignment | None:
     """Assign the MR to a merge owner and window. Return None when nobody fits.
 
@@ -31,6 +34,11 @@ def assign_merge(
     person id. A reason is stored, the merge owner is told, and an audit event
     is written. When nobody fits, an admin alert is queued, unless
     `alert_on_no_fit` is false (the retry sends one summary instead, MRDR-3).
+
+    An urgent MR (`urgent`, or `urgent_at` set when `urgent` is None) ignores
+    the daily merge limit and takes the earliest window from now. Every other
+    rule stays. The assignment records `over_limit` when the limit was
+    reached (URG-23).
 
     The caller owns the transaction and already holds the MR lock and
     `booking.lock_booking()`: the count and the insert are then serial (INV-1).
@@ -44,7 +52,9 @@ def assign_merge(
     candidates = list(
         Person.objects.filter(is_merge_owner=True).exclude(pk__in=barred).order_by("pk")
     )
-    fit = _best_fit(candidates, timezone.now())
+    if urgent is None:
+        urgent = merge_request.urgent_at is not None
+    fit = _best_fit(candidates, timezone.now(), urgent)
     if fit is None:
         record(
             "orchestrator",
@@ -66,14 +76,19 @@ def assign_merge(
     if person.pk in barred:
         raise ValueError("The author or a reviewer cannot be a merge owner (INV-2).")
     local_window = timezone.localtime(window)
+    over_limit = used >= limit
+    reason = (
+        f"Earliest window {local_window:%H:%M} on {local_window.date().isoformat()}; "
+        f"{used} of {limit} merges that day"
+    )
+    if over_limit:
+        reason += " (urgent, over the daily limit)"
     assignment = MergeAssignment.objects.create(
         merge_request=merge_request,
         merge_owner=person,
         window=window,
-        reason=(
-            f"Earliest window {local_window:%H:%M} on {local_window.date().isoformat()}; "
-            f"{used} of {limit} merges that day"
-        ),
+        reason=reason,
+        over_limit=over_limit,
     )
     record(
         "orchestrator",
@@ -128,7 +143,7 @@ def cancel_open_assignment(merge_request: MergeRequest, reason: str) -> None:
 
 
 def _best_fit(
-    candidates: list[Person], now: datetime
+    candidates: list[Person], now: datetime, urgent: bool = False
 ) -> tuple[Person, datetime, int, int] | None:
     """Return the best (person, window, assignments that day, limit), or None."""
     today = timezone.localdate(now)
@@ -145,11 +160,14 @@ def _best_fit(
         )
         for window in _windows(person, days, leave_ranges[person.pk], now):
             day = timezone.localtime(window).date()
-            if counts[(person.pk, day)] < limit:
-                used = counts[(person.pk, day)]
-                fits.append(
-                    ((day, used, window, person.pk), person, window, used, limit)
+            used = counts[(person.pk, day)]
+            if urgent or used < limit:
+                key = (
+                    (window, used, person.pk)
+                    if urgent
+                    else (day, used, window, person.pk)
                 )
+                fits.append((key, person, window, used, limit))
                 break
     if not fits:
         return None

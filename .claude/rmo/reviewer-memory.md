@@ -88,3 +88,21 @@ kind: suppress
 applies-to: reviews/management/commands/run_worker.py, docker-compose.yml
 rule: `process_next_event` and `dispatch_due` stay unguarded on purpose: an error there (for example a dead connection) ends the worker, and `restart: unless-stopped` starts a fresh process. Only the scheduled jobs are guarded. Still a defect: guarding those two calls without handling a dead connection, which would make the loop spin.
 source: RWF review, 2026-11-10
+
+### M-urgency-limit-warns-only
+kind: suppress
+applies-to: reviews/urgency.py
+rule: The team's weekly urgent limit only warns (URG-13). Two approvals for one team at the same instant can both miss the over-limit alert. Still a defect: blocking an approval at the limit, or no warning in the tab.
+source: URG Session 2 review, 2026-11-10
+
+### M-urgent-merge-reroute
+kind: suppress
+applies-to: reviews/urgency.py, reviews/merge_router.py
+rule: An urgent approval cancels a merge assignment that is not for today and routes again. If nothing fits, the MR waits for the daily merge retry; a re-route can return the same owner and window, so that owner gets a cancel and an assign message. Still a defect: an urgent MR kept on a missed or later window, or the author or a reviewer as merge owner.
+source: URG Session 4 review, 2026-11-10
+
+### M-urgent-signature
+kind: suppress
+applies-to: reviews/booking.py, reviews/merge_router.py
+rule: `book_area_review` and `assign_merge` take `urgent: bool | None = None`; None derives the flag from `MergeRequest.urgent_at` (design.md). Do not flag the spec Contracts wording `urgent: bool = False`.
+source: URG Session 4 review, 2026-11-10

@@ -289,6 +289,17 @@ This raises `AuditImmutableError`.
 5. The next day, the same MRs are reported again. A `waiting_on_author` MR, an unbooked area review and an approved MR without a merge owner are never listed.
 6. Waiting is not stuck (RWF): move an `in_review` MR's *State changed at* back by two weeks, but leave its review session booked on a future day. It is not listed under *No progress*. Move the session's day to the past: it is listed under *Missed slot*, still not under *No progress*.
 
+### R. Urgency (URG) (unverified)
+
+1. In the admin, create a team (*Team*) with a lead and a delegate, and set *Person* "team" and "reports to" for the author (id 11), so the approver is the lead. Give the team a weekly limit of 1.
+2. `gmock open 7 20 --reviewer 90 --file api/orders.py`, `gmock approve 7 <iid> 90`, then run the worker. The MR is `in_review`, booked on a later day than today.
+3. As the author, open the MR in the panel *My MRs* and request urgency with a reason. The approver gets a chat message. The author cannot decide it. The author can withdraw it while it is pending.
+4. As the approver (or an admin), open the *Urgency requests* tab and approve the request. The MR is marked urgent, the area review is booked today (over the owner's daily budget if needed, with the overage on the session), and the author is told. *Audit events* has `urgency.approved`.
+5. Decline: request urgency for another MR, then decline it in *Urgency requests* with a note. The author gets "Your urgency request for MR ... was declined: <note>", *Audit events* has `urgency.declined`, and the bookings do not change.
+6. Approve a second request from the same team within 7 days. The admin gets a "has 2 approved urgent requests" alert, and the approval still goes through.
+7. Put the lead on leave and request again: the delegate decides. With both on leave, the lead's lead decides, and with none the admins decide. A person who is not the approver or an admin gets a 404.
+8. Merge: `gmock approve 7 <iid> <reviewer>` on an urgent MR with an open merge assignment on a later day. The assignment is cancelled with "Do not merge ...", and a new one is made today with the earliest window, over the owner's daily merge limit if needed (`over_limit` is set and the reason says so). Leave, working days and the author or a reviewer as merge owner still apply.
+
 ---
 
 ## 5. Reset

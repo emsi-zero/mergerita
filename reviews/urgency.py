@@ -12,12 +12,13 @@ from django.utils import timezone
 
 from audit.services import record
 from integrations.models import OutboxCall, OutboxStatus
-from reviews import area_resolver, booking, rebooking
+from reviews import area_resolver, booking, merge_router, rebooking
 from reviews.alerts import queue_admin_alert, queue_notification
 from reviews.models import (
     AreaReview,
     AreaReviewState,
     Leave,
+    MergeAssignment,
     MergeRequest,
     MergeRequestState,
     Person,
@@ -312,6 +313,8 @@ def _apply_urgency(merge_request: MergeRequest) -> None:
         return
     booking.lock_booking()
     today = timezone.localdate()
+    if merge_request.state == MergeRequestState.APPROVED:
+        _route_merge_today(merge_request, today)
     notes: list[str] = []
     area_reviews = (
         AreaReview.objects.select_for_update(of=("self",))
@@ -343,3 +346,23 @@ def _apply_urgency(merge_request: MergeRequest) -> None:
         ).exists()
     ):
         area_resolver.mark_in_review(merge_request)
+
+
+def _route_merge_today(merge_request: MergeRequest, today: date) -> None:
+    """Give an approved MR a merge window from now, over the daily limit (URG-23).
+
+    An open assignment on another day (later, or missed earlier) is cancelled
+    first. One whose local date is today stays. The caller holds the MR lock and `lock_booking()`.
+    """
+    open_assignment = MergeAssignment.objects.filter(
+        merge_request=merge_request,
+        merged_at__isnull=True,
+        cancelled_at__isnull=True,
+    ).first()
+    if open_assignment is not None:
+        if timezone.localtime(open_assignment.window).date() == today:
+            return
+        merge_router.cancel_open_assignment(
+            merge_request, "the merge request became urgent"
+        )
+    merge_router.assign_merge(merge_request, urgent=True)
