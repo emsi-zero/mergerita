@@ -143,3 +143,9 @@ Recorded: Contracts say urgent: bool = False for book_area_review and assign_mer
 Accepted: a cancel followed by no fit leaves the MR to the daily merge retry; a re-route can return the same owner and window (two chat messages).
 Observed once: tests_e2e test_approved_merge_request_gets_reviewers_in_the_mock failed with a GitLabError transport error from the mock; passed on 6 later runs, no gateway or mock change in this spec.
 Gate A green: 155 passed, trace 27/27. Session 4 done.
+
+## 2026-11-10 14:14 UTC — done
+Teams and reporting lines (URG-1..4); urgency requests, approver resolution and decisions (URG-5..13, 26); urgent booking over budget (URG-14..22, 24, 25, 27); urgent merge routing over the daily limit (URG-23). 27/27 criteria traced; both gates green in all four sessions.
+
+## 2026-11-10 14:14 UTC — spec closed
+Session archived: .claude/rmo/state/archive/session-20261110T141450Z.json
