@@ -35,6 +35,12 @@
       "sha256": "c88c80f6cc24b15c98cfda9e20ff86a686a9becd3a14b43a9445c32bbb386ebe",
       "approved_at": "2026-11-10T13:41:49+00:00",
       "note": "delta: URG-14, 15, 18 changed, URG-27 added"
+    },
+    {
+      "spec": "2026-11-11-urgency-gaps-opted-out-merge-owners-expiry-remin",
+      "sha256": "13f806fe413189d8b42b28aceef22baa630ae1f58af10575769a3613bae85aae",
+      "approved_at": "2026-11-11T09:25:17+00:00",
+      "note": ""
     }
   ]
 }
