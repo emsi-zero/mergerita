@@ -101,6 +101,7 @@ RMO_GITLAB_PROJECT_IDS = [
     if project_id.strip()
 ]
 RMO_RECONCILE_INTERVAL_SECONDS = 300
+RMO_URGENCY_CHECK_INTERVAL_SECONDS = 300
 # Each list call asks for MRs updated since the cursor minus this lag, so an MR whose
 # update was not visible yet when the cursor passed it is read on the next call.
 RMO_RECONCILE_LAG_SECONDS = 60

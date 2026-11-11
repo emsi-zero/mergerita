@@ -1,6 +1,6 @@
 # TASKS: Urgency gaps: opted-out merge owners, expiry, reminders, working days
 
-Spec: spec.md · Key: UGF · Route: project · State: pending
+Spec: spec.md · Key: UGF · Route: project · State: done
 Checkpoint: `.claude/rmo/bin/rmo gate-a`
 
 ## Session 1 — Routing, expiry, working days, and the migration
@@ -21,16 +21,16 @@ Resume: Session 1 code and tests done; Gate A run. Next: Session 2 T1 (urgency.w
 
 ## Session 2 — Reminders, escalation, watchdog case, docs
 
-State: pending
+State: done
 Covers: UGF-4, UGF-5, UGF-6, UGF-7, UGF-8
 
-- [ ] T1 — `urgency.working_hours`, `urgency.run_urgency_check` (remind, escalate, per-request transaction) — UGF-4, UGF-5
-- [ ] T2 — `RMO_URGENCY_CHECK_INTERVAL_SECONDS` and the worker loop call through `run_guarded` — UGF-6
-- [ ] T3 — watchdog "Urgency pending" case with a `Finding.detail` line — UGF-8
-- [ ] T4 — tests: UGF-4, 5, 8 (TestCase); UGF-6 and UGF-7 as two-thread TransactionTestCases (mutation-checked: no MR lock in the check, no re-read)
-- [ ] T5 — docs: README "Teams and urgency", `docs/testing.md` scenario R steps
+- [x] T1 — `urgency.working_hours`, `urgency.run_urgency_check` (remind, escalate, per-request transaction) — UGF-4, UGF-5
+- [x] T2 — `RMO_URGENCY_CHECK_INTERVAL_SECONDS` and the worker loop call through `run_guarded` — UGF-6
+- [x] T3 — watchdog "Urgency pending" case with a `Finding.detail` line — UGF-8
+- [x] T4 — tests: UGF-4, 5, 8 (TestCase); UGF-6 and UGF-7 as two-thread TransactionTestCases (mutation-checked: no MR lock in the check, no re-read)
+- [x] T5 — docs: README "Teams and urgency", `docs/testing.md` scenario R steps
 
 Gate A: `.claude/rmo/bin/rmo gate-a --session 2 --log "Session 2 Gate A"`
 Gate B: rmo-reviewer (spec, style, query) · rmo-deep-reviewer (logic, security; families LOCK, TX, IO, AUTH, DATA)
 
-Resume: —
+Resume: Session 2 code, tests and docs done; Gate A run. Next: Gate B for Session 2.

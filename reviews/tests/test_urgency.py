@@ -4,6 +4,8 @@ import threading
 import time as time_module
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, time, timedelta
+from datetime import timezone as dt_timezone
+from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.contrib.messages import get_messages
@@ -379,6 +381,26 @@ class RequestTests(TestCase):
         )
         urgency.request(self.author, third.pk, "Again", "user:ann")
         self.assertTrue(urgency.decidable_requests(self.boss).exists())
+        with self.subTest("no approver: the admins are told"):
+            adrift_mr = create_merge_request(
+                self.author, 8, "Adrift", MergeRequestState.IN_REVIEW
+            )
+            adrift = pending_request(adrift_mr, self.author, None)
+            with transaction.atomic():
+                locked = MergeRequest.objects.select_for_update().get(pk=adrift_mr.pk)
+                merges.record_merge(locked, None, timezone.now(), set())
+
+            adrift.refresh_from_db()
+            self.assertEqual(adrift.status, UrgencyRequestStatus.EXPIRED)
+            self.assertTrue(
+                OutboxCall.objects.filter(
+                    kind="notify",
+                    payload={
+                        "gitlab_user_ids": [self.admin.gitlab_user_id],
+                        "text": "The urgency request for MR 7:8 expired: the MR was merged.",
+                    },
+                ).exists()
+            )
 
     def test_ugf_3_approver_resolution_skips_people_off_today(self):
         """UGF-3: Given a Thursday, when the approver is resolved, then a
@@ -398,6 +420,16 @@ class RequestTests(TestCase):
         self.boss.working_days = [5, 6, 0, 1, 2]
         self.boss.save()
 
+        with self.subTest("just after midnight Tehran, still Wednesday in UTC"):
+            # Wednesday 20:45 UTC is Thursday 00:15 in Asia/Tehran.
+            late = datetime(2026, 11, 11, 20, 45, tzinfo=dt_timezone.utc)
+            with mock.patch("django.utils.timezone.now", return_value=late):
+                urgency.request(self.author, self.merge_request.pk, "Now", "user:ann")
+
+            self.assertEqual(
+                UrgencyRequest.objects.get(merge_request=self.merge_request).approver,
+                delegate,
+            )
         with self.subTest("the manager is off: the delegate"):
             self.assertEqual(urgency.resolve_approver(self.author, thursday), delegate)
         with self.subTest("the delegate is off too: one level up"):

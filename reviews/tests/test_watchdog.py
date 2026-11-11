@@ -257,7 +257,13 @@ class WatchdogCasesTest(TestCase):
         event = AuditEvent.objects.get(action="watchdog.run")
         self.assertEqual(
             event.after,
-            {"no_ai_verdict": 1, "missed_slot": 0, "needs_triage": 1, "no_progress": 0},
+            {
+                "no_ai_verdict": 1,
+                "missed_slot": 0,
+                "needs_triage": 1,
+                "no_progress": 0,
+                "urgency_pending": 0,
+            },
         )
         with self.subTest("still stuck the next day"):
             tomorrow = NOW + timedelta(days=1)

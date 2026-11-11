@@ -106,3 +106,15 @@ kind: suppress
 applies-to: reviews/booking.py, reviews/merge_router.py
 rule: `book_area_review` and `assign_merge` take `urgent: bool | None = None`; None derives the flag from `MergeRequest.urgent_at` (design.md). Do not flag the spec Contracts wording `urgent: bool = False`.
 source: URG Session 4 review, 2026-11-10
+
+### M-urgency-check-cost
+kind: suppress
+applies-to: reviews/urgency.py
+rule: Every urgency check pass (every RMO_URGENCY_CHECK_INTERVAL_SECONDS) locks and re-reads each pending request past the reminder time, including admin-owned requests already reminded that will never escalate. Bounded by the pending set. Still a defect: a pass that reminds or escalates twice, or one failing request that stops the rest.
+source: UGF Session 2 review, 2026-11-11
+
+### M-escalation-stops-at-visited
+kind: suppress
+applies-to: reviews/urgency.py
+rule: Escalation walks up from the current approver's manager and stops at anyone already visited (the requester or the old approver), handing the request to the admins. A delegate who reports to the requester therefore escalates straight to the admins. Fails safe. Still a defect: escalation returning the requester or the old approver.
+source: UGF Session 2 review, 2026-11-11

@@ -24,8 +24,11 @@ from reviews.models import (
     RebookingSettings,
     ReviewSession,
     ReviewSessionOutcome,
+    UrgencyRequest,
+    UrgencyRequestStatus,
 )
 from reviews.rebooking import claim_day
+from reviews.urgency import working_hours
 
 OPEN_STATES = (MergeRequestState.AWAITING_BOOKING, MergeRequestState.IN_REVIEW)
 
@@ -37,6 +40,7 @@ class Finding:
     merge_request: MergeRequest
     days: int
     sessions: list[ReviewSession] = field(default_factory=list)
+    detail: str = ""  # replaces the "days" line in the summary when set
 
 
 def working_days(start: date, today: date, weekdays: Iterable[int]) -> int:
@@ -105,7 +109,39 @@ def _cases(
             "No progress",
             lambda row, today: _no_progress(row, today, now, listed),
         ),
+        # Last, so its MRs never hide another case's MRs from the catch-all.
+        (
+            "urgency_pending",
+            "Urgency pending",
+            lambda row, today: _urgency_pending(row, now),
+        ),
     ]
+
+
+def _urgency_pending(row: RebookingSettings, now: datetime) -> list[Finding]:
+    """Pending urgency requests that waited past the reminder threshold (UGF-8)."""
+    findings = []
+    pending = (
+        UrgencyRequest.objects.filter(status=UrgencyRequestStatus.PENDING)
+        .select_related("merge_request", "requester", "approver")
+        .order_by("pk")
+    )
+    for urgency in pending:
+        hours = working_hours(
+            urgency.approver_since, now, settings.RMO_DEFAULT_WORKING_DAYS
+        )
+        if hours >= row.urgency_reminder_hours:
+            merge_request = urgency.merge_request
+            approver = urgency.approver.name if urgency.approver else "admins"
+            findings.append(
+                Finding(
+                    merge_request,
+                    0,
+                    detail=f"{_ref(merge_request)} {merge_request.title} — "
+                    f"{urgency.requester.name} → {approver} — {int(hours)} hours",
+                )
+            )
+    return findings
 
 
 def _company_days(start: datetime, today: date) -> int:
@@ -215,6 +251,9 @@ def _summary(found: list[tuple[str, str, list[Finding]]]) -> str:
             continue
         lines.append(f"{label} ({len(findings)}):")
         for finding in findings:
+            if finding.detail:
+                lines.append(finding.detail)
+                continue
             merge_request = finding.merge_request
             url = f" {merge_request.web_url}" if merge_request.web_url else ""
             lines.append(

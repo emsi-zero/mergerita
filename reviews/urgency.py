@@ -4,8 +4,11 @@ Every write takes the MR row lock first, then reads the request again in a new
 statement (INV-1, LOCK-2).
 """
 
+import logging
+from collections.abc import Iterable
 from datetime import date, datetime, time, timedelta
 
+from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.db.models import QuerySet
 from django.utils import timezone
@@ -22,12 +25,15 @@ from reviews.models import (
     MergeRequest,
     MergeRequestState,
     Person,
+    RebookingSettings,
     ReviewSession,
     ReviewSessionOutcome,
     Team,
     UrgencyRequest,
     UrgencyRequestStatus,
 )
+
+logger = logging.getLogger(__name__)
 
 REQUESTABLE_STATES = (
     MergeRequestState.AWAITING_AI_REVIEW,
@@ -407,3 +413,126 @@ def _route_merge_today(merge_request: MergeRequest, today: date) -> None:
             merge_request, "the merge request became urgent"
         )
     merge_router.assign_merge(merge_request, urgent=True)
+
+
+def working_hours(start: datetime, end: datetime, weekdays: Iterable[int]) -> float:
+    """Return the hours of [start, end] that fall on `weekdays`, in local time (UGF-4)."""
+    weekdays = set(weekdays)
+    start, end = timezone.localtime(start), timezone.localtime(end)
+    total = timedelta()
+    day = start.date()
+    while day <= end.date():
+        if day.weekday() in weekdays:
+            day_start = timezone.make_aware(datetime.combine(day, time.min))
+            day_end = timezone.make_aware(
+                datetime.combine(day + timedelta(days=1), time.min)
+            )
+            total += max(min(end, day_end) - max(start, day_start), timedelta())
+        day += timedelta(days=1)
+    return total.total_seconds() / 3600
+
+
+def _name(person: Person | None) -> str:
+    return person.name if person else "the admins"
+
+
+def run_urgency_check(now: datetime | None = None) -> None:
+    """Remind or escalate the pending requests that waited too long (UGF-4, 5, 6).
+
+    Each request has its own transaction, so one failure does not stop the
+    rest (IO-2). It raises at the end when any request failed.
+    """
+    now = now or timezone.now()
+    row = RebookingSettings.load()
+    candidates = list(
+        UrgencyRequest.objects.filter(
+            status=UrgencyRequestStatus.PENDING,
+            approver_since__lte=now - timedelta(hours=row.urgency_reminder_hours),
+        )
+        .order_by("pk")
+        .values_list("pk", flat=True)
+    )
+    failed = []
+    for request_id in candidates:
+        try:
+            with transaction.atomic():
+                _check_one(request_id, row, now)
+        except Exception:  # pylint: disable=broad-exception-caught
+            logger.exception("urgency check failed for request %s", request_id)
+            failed.append(request_id)
+    if failed:
+        # One error for the guard, so the admins hear about a persistent fault once.
+        raise RuntimeError(f"urgency check failed for requests {failed}")
+
+
+def _check_one(request_id: int, row: RebookingSettings, now: datetime) -> None:
+    """Lock the MR, read the request again, then remind or escalate it (INV-1, LOCK-2)."""
+    merge_request_id = UrgencyRequest.objects.values_list(
+        "merge_request_id", flat=True
+    ).get(pk=request_id)
+    merge_request = MergeRequest.objects.select_for_update(of=("self",)).get(
+        pk=merge_request_id
+    )
+    urgency = (
+        UrgencyRequest.objects.select_related("requester", "approver")
+        .filter(pk=request_id, status=UrgencyRequestStatus.PENDING)
+        .first()
+    )
+    if urgency is None:
+        return
+    hours = working_hours(
+        urgency.approver_since, now, settings.RMO_DEFAULT_WORKING_DAYS
+    )
+    escalation = row.urgency_escalation_hours
+    if urgency.approver is not None and escalation and hours >= escalation:
+        _escalate(urgency, merge_request, now)
+    elif hours >= row.urgency_reminder_hours and urgency.reminded_at is None:
+        urgency.reminded_at = now
+        urgency.save(update_fields=["reminded_at"])
+        record(
+            "orchestrator",
+            "urgency.reminded",
+            urgency,
+            {"reminded_at": None},
+            {"reminded_at": now.isoformat()},
+        )
+        _notify_approver(
+            urgency,
+            f"Reminder: urgency for MR {_label(merge_request)} by "
+            f"{urgency.requester.name} has waited {int(hours)} hours. "
+            "Decide in the panel.",
+        )
+
+
+def _escalate(
+    urgency: UrgencyRequest, merge_request: MergeRequest, now: datetime
+) -> None:
+    """Move the request one level up from its approver; None means the admins (UGF-5)."""
+    old = urgency.approver
+    new = _walk(
+        old.reports_to,
+        urgency.requester,
+        timezone.localdate(now),
+        {urgency.requester_id, old.pk},
+    )
+    urgency.approver = new
+    urgency.approver_since = now
+    urgency.reminded_at = None
+    urgency.save(update_fields=["approver", "approver_since", "reminded_at"])
+    record(
+        "orchestrator",
+        "urgency.escalated",
+        urgency,
+        {"approver_id": old.pk},
+        {"approver_id": new.pk if new else None},
+    )
+    label = _label(merge_request)
+    queue_notification(
+        [old.gitlab_user_id],
+        f"The urgency request for MR {label} was moved to {_name(new)}.",
+    )
+    _notify_approver(
+        urgency,
+        f"Urgency requested for MR {label} by {urgency.requester.name} was "
+        f"escalated to you: {urgency.reason}. Decide in the panel.",
+    )

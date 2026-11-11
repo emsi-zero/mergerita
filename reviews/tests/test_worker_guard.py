@@ -24,6 +24,7 @@ def idle_loop(**patches: object):
     """Patch the worker loop's calls: idle inbox and outbox, no-op jobs."""
     defaults = {
         "reconcile_all": mock.Mock(),
+        "run_urgency_check": mock.Mock(),
         "run_daily_retry": mock.Mock(),
         "run_daily_rebooking": mock.Mock(),
         "run_daily_watchdog": mock.Mock(),

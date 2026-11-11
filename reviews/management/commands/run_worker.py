@@ -11,6 +11,7 @@ from reviews.alerts import queue_admin_alert
 from reviews.merge_retry import run_daily_retry
 from reviews.rebooking import run_daily_rebooking
 from reviews.reconciler import reconcile_all
+from reviews.urgency import run_urgency_check
 from reviews.watchdog import run_daily_watchdog
 from reviews.worker import process_next_event
 
@@ -75,11 +76,17 @@ class Command(BaseCommand):
     def handle(self, *args: object, **options: object) -> None:
         failing: set[str] = set()
         next_reconcile = time.monotonic()
+        next_urgency_check = time.monotonic()
         while True:
             if time.monotonic() >= next_reconcile:
                 run_guarded("reconcile_all", reconcile_all, failing)
                 next_reconcile = (
                     time.monotonic() + settings.RMO_RECONCILE_INTERVAL_SECONDS
+                )
+            if time.monotonic() >= next_urgency_check:
+                run_guarded("run_urgency_check", run_urgency_check, failing)
+                next_urgency_check = (
+                    time.monotonic() + settings.RMO_URGENCY_CHECK_INTERVAL_SECONDS
                 )
             run_guarded("run_daily_retry", run_daily_retry, failing)
             run_guarded("run_daily_rebooking", run_daily_rebooking, failing)
