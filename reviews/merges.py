@@ -3,6 +3,7 @@
 from datetime import datetime, timedelta
 
 from audit.services import record
+from reviews import urgency
 from reviews.alerts import queue_admin_alert
 from reviews.models import (
     AreaReview,
@@ -84,6 +85,7 @@ def record_merge(
             "violation": assignment.violation,
         },
     )
+    urgency.expire_pending(merge_request)
     if assignment.violation != MergeViolation.NONE:
         _alert(merge_request, merger, merged_by_gitlab_id, assignment.violation)
     if merged_by_gitlab_id is None:

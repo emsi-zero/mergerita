@@ -31,6 +31,7 @@ from reviews.models import (
     MergeAssignment,
     MergeRequest,
     MergeRequestState,
+    MergeRoutingSettings,
     OwnerRole,
     Ownership,
     Person,
@@ -651,6 +652,57 @@ class UrgentBookingTests(TestCase):
         urgent_review.refresh_from_db()
         self.assertEqual(urgent_review.booked_day, MONDAY)
         self.assertEqual(old.booked_day, TUESDAY)
+
+    def test_ugf_1_a_merge_owner_with_limit_zero_is_never_chosen(self):
+        """UGF-1: Given merge owners whose effective daily limit is 0, when an
+        MR is routed, then they are never chosen, urgent or not; a limit of 1
+        reached today still gets an urgent MR, over the limit."""
+        now = timezone.make_aware(
+            timezone.datetime.combine(MONDAY, timezone.datetime.min.time())
+        ).replace(hour=8)
+        patcher = mock.patch.object(timezone, "now", return_value=now)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+        def route(iid: int, urgent: bool, **fields: object):
+            Person.objects.filter(is_merge_owner=True).delete()
+            MergeAssignment.objects.all().delete()
+            owner = person(40, is_merge_owner=True, merge_times=["10:00"], **fields)
+            merge_request = MergeRequest.objects.create(
+                project_id=7,
+                iid=iid,
+                author=self.author,
+                title="MR",
+                state=MergeRequestState.APPROVED,
+            )
+            with transaction.atomic():
+                booking.lock_booking()
+                return owner, merge_router.assign_merge(merge_request, urgent=urgent)
+
+        with self.subTest("own limit 0, urgent"):
+            self.assertIsNone(route(1, True, daily_merge_limit=0)[1])
+        with self.subTest("own limit 0, not urgent"):
+            self.assertIsNone(route(2, False, daily_merge_limit=0)[1])
+        with self.subTest("default limit 0, own limit empty, urgent"):
+            MergeRoutingSettings.objects.update_or_create(
+                pk=1, defaults={"default_daily_merge_limit": 0}
+            )
+            self.assertIsNone(route(3, True, daily_merge_limit=None)[1])
+        with self.subTest("own limit 1, reached, urgent"):
+            owner, first = route(4, False, daily_merge_limit=1)
+            self.assertEqual(first.merge_owner, owner)
+            urgent_mr = MergeRequest.objects.create(
+                project_id=7,
+                iid=5,
+                author=self.author,
+                title="MR",
+                state=MergeRequestState.APPROVED,
+            )
+            with transaction.atomic():
+                booking.lock_booking()
+                assignment = merge_router.assign_merge(urgent_mr, urgent=True)
+            self.assertEqual(assignment.merge_owner, owner)
+            self.assertTrue(assignment.over_limit)
 
     def test_urg_23_urgent_merge_routing_ignores_only_the_daily_limit(
         self,

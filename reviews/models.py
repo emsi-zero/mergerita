@@ -405,6 +405,19 @@ class RebookingSettings(models.Model):
         db_default=5,
         validators=[MinValueValidator(1), MaxValueValidator(60)],
     )
+    urgency_reminder_hours = models.PositiveIntegerField(
+        default=4,
+        db_default=4,
+        validators=[MinValueValidator(1), MaxValueValidator(72)],
+    )
+    # Empty switches escalation off.
+    urgency_escalation_hours = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        default=8,
+        db_default=8,
+        validators=[MinValueValidator(1), MaxValueValidator(72)],
+    )
     # The local days the jobs last claimed. Written only by the jobs.
     last_rebooking_on = models.DateField(null=True, blank=True, editable=False)
     last_watchdog_on = models.DateField(null=True, blank=True, editable=False)
@@ -412,6 +425,13 @@ class RebookingSettings(models.Model):
     class Meta:
         verbose_name = "Rebooking and watchdog settings"
         verbose_name_plural = "Rebooking and watchdog settings"
+
+    def clean(self) -> None:
+        escalation = self.urgency_escalation_hours
+        if escalation is not None and escalation <= self.urgency_reminder_hours:
+            raise ValidationError(
+                {"urgency_escalation_hours": "Must be larger than the reminder hours."}
+            )
 
     @classmethod
     def load(cls) -> "RebookingSettings":
@@ -485,6 +505,7 @@ class UrgencyRequestStatus(models.TextChoices):  # pylint: disable=too-many-ance
     APPROVED = "approved"
     DECLINED = "declined"
     WITHDRAWN = "withdrawn"
+    EXPIRED = "expired"
 
 
 class UrgencyRequest(models.Model):
@@ -525,6 +546,9 @@ class UrgencyRequest(models.Model):
     )
     created_at = models.DateTimeField(default=timezone.now, db_default=Now())
     decided_at = models.DateTimeField(null=True, blank=True)
+    # When the current approver was assigned: the start of both urgency clocks.
+    approver_since = models.DateTimeField(default=timezone.now, db_default=Now())
+    reminded_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         constraints = [

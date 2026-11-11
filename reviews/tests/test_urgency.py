@@ -3,7 +3,7 @@
 import threading
 import time as time_module
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 
 from django.contrib.auth import get_user_model
 from django.contrib.messages import get_messages
@@ -15,7 +15,7 @@ from audit.models import AuditEvent
 from integrations.models import OutboxCall
 from panel.tests.helpers import panel_login
 from panel.tests.test_merge_requests import create_merge_request, create_person
-from reviews import urgency
+from reviews import merges, urgency
 from reviews.models import (
     Leave,
     MergeRequest,
@@ -336,6 +336,82 @@ class RequestTests(TestCase):
             self.author.refresh_from_db()
 
             self.assertIsNone(urgency.resolve_approver(self.author, today))
+
+    def test_ugf_2_merging_expires_the_pending_request(self):
+        """UGF-2: Given a pending and an approved request, when their MRs are
+        recorded as merged, then the pending one is expired with an audit event
+        and a message to the approver, it leaves the tab, and the approved one
+        is untouched; a new request for another MR is still possible."""
+        # given
+        pending = pending_request(self.merge_request, self.author, self.boss)
+        other_mr = create_merge_request(
+            self.author, 6, "Other", MergeRequestState.IN_REVIEW
+        )
+        approved = pending_request(other_mr, self.author, self.boss)
+        UrgencyRequest.objects.filter(pk=approved.pk).update(
+            status=UrgencyRequestStatus.APPROVED
+        )
+        # when
+        for merge_request in (self.merge_request, other_mr):
+            with transaction.atomic():
+                locked = MergeRequest.objects.select_for_update().get(
+                    pk=merge_request.pk
+                )
+                merges.record_merge(locked, None, timezone.now(), set())
+        # then
+        pending.refresh_from_db()
+        approved.refresh_from_db()
+        self.assertEqual(pending.status, UrgencyRequestStatus.EXPIRED)
+        self.assertIsNotNone(pending.decided_at)
+        self.assertIsNone(pending.decided_by)
+        self.assertEqual(approved.status, UrgencyRequestStatus.APPROVED)
+        self.assertEqual(AuditEvent.objects.filter(action="urgency.expired").count(), 1)
+        self.assertEqual(
+            AuditEvent.objects.get(action="urgency.expired").actor, "orchestrator"
+        )
+        self.assertIn(
+            "The urgency request for MR 7:5 expired: the MR was merged.", texts()
+        )
+        self.assertIn([self.boss.gitlab_user_id], recipients())
+        self.assertFalse(urgency.decidable_requests(self.boss).exists())
+        third = create_merge_request(
+            self.author, 7, "Third", MergeRequestState.IN_REVIEW
+        )
+        urgency.request(self.author, third.pk, "Again", "user:ann")
+        self.assertTrue(urgency.decidable_requests(self.boss).exists())
+
+    def test_ugf_3_approver_resolution_skips_people_off_today(self):
+        """UGF-3: Given a Thursday, when the approver is resolved, then a
+        manager who does not work on Thursday is skipped for a delegate who
+        does, then one level up, then the admins."""
+        thursday = date(2026, 11, 12)
+        director = create_person(10, "Dina Director", "dina")
+        delegate = create_person(11, "Dan Delegate", "dan")
+        for person in (director, delegate):
+            person.working_days = [0, 1, 2, 3, 4]
+            person.save()
+        team = Team.objects.create(name="Web", lead=self.boss, delegate=delegate)
+        self.author.team = team
+        self.author.save()
+        self.boss.reports_to = director
+        self.boss.save()
+        self.boss.working_days = [5, 6, 0, 1, 2]
+        self.boss.save()
+
+        with self.subTest("the manager is off: the delegate"):
+            self.assertEqual(urgency.resolve_approver(self.author, thursday), delegate)
+        with self.subTest("the delegate is off too: one level up"):
+            delegate.working_days = [5, 6, 0, 1, 2]
+            delegate.save()
+            self.assertEqual(urgency.resolve_approver(self.author, thursday), director)
+        with self.subTest("nobody works Thursday: the admins"):
+            director.working_days = [5, 6, 0, 1, 2]
+            director.save()
+            self.assertIsNone(urgency.resolve_approver(self.author, thursday))
+        with self.subTest("a working day"):
+            self.assertEqual(
+                urgency.resolve_approver(self.author, date(2026, 11, 11)), self.boss
+            )
 
     def test_urg_11_decline_notifies_the_author_and_changes_no_booking(self):
         """URG-11: Given a pending request, when the approver declines with a

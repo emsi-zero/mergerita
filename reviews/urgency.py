@@ -42,19 +42,23 @@ class UrgencyRefused(Exception):
 
 
 def _available(person: Person, today: date) -> bool:
-    return not Leave.objects.filter(
-        person=person, start_date__lte=today, end_date__gte=today
-    ).exists()
+    """True when `person` is not on leave and works on `today` (URG-8, UGF-3)."""
+    return (
+        today.weekday() in person.working_days
+        and not Leave.objects.filter(
+            person=person, start_date__lte=today, end_date__gte=today
+        ).exists()
+    )
 
 
-def resolve_approver(author: Person, today: date) -> Person | None:
-    """Return who decides `author`'s request, or None when the admins decide (URG-8).
+def _walk(
+    start: Person | None, author: Person, today: date, visited: set[int]
+) -> Person | None:
+    """Walk up from `start` to the first available approver or team delegate.
 
-    A visited set ends the walk, even on a reporting cycle (INV-5). The author
-    is never returned.
+    A visited set ends the walk, even on a reporting cycle (INV-5).
     """
-    visited = {author.pk}
-    candidate = author.reports_to
+    candidate = start
     while candidate is not None and candidate.pk not in visited:
         visited.add(candidate.pk)
         if _available(candidate, today):
@@ -73,6 +77,14 @@ def resolve_approver(author: Person, today: date) -> Person | None:
                 return delegate
         candidate = candidate.reports_to
     return None
+
+
+def resolve_approver(author: Person, today: date) -> Person | None:
+    """Return who decides `author`'s request, or None when the admins decide (URG-8).
+
+    The author is never returned (INV-5).
+    """
+    return _walk(author.reports_to, author, today, {author.pk})
 
 
 def weekly_count(team: Team) -> int:
@@ -103,6 +115,35 @@ def _notify_approver(urgency: UrgencyRequest, text: str) -> None:
         queue_admin_alert(text)
     else:
         queue_notification([urgency.approver.gitlab_user_id], text)
+
+
+def expire_pending(merge_request: MergeRequest) -> None:
+    """Expire the MR's pending request and tell its approver (UGF-2).
+
+    The caller holds the MR lock and the transaction. An approved request stays.
+    """
+    urgency = (
+        UrgencyRequest.objects.select_related("approver")
+        .filter(merge_request=merge_request, status=UrgencyRequestStatus.PENDING)
+        .first()
+    )
+    if urgency is None:
+        return
+    urgency.status = UrgencyRequestStatus.EXPIRED
+    urgency.decided_at = timezone.now()
+    urgency.save(update_fields=["status", "decided_at"])
+    record(
+        "orchestrator",
+        "urgency.expired",
+        urgency,
+        {"status": UrgencyRequestStatus.PENDING},
+        {"status": UrgencyRequestStatus.EXPIRED},
+    )
+    _notify_approver(
+        urgency,
+        f"The urgency request for MR {_label(merge_request)} expired: "
+        "the MR was merged.",
+    )
 
 
 def request(author: Person, merge_request_id: int, reason: str, actor: str) -> None:

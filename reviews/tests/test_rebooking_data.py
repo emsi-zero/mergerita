@@ -151,6 +151,8 @@ class RebookingSettingsFormTest(TestCase):
                 "ai_review_threshold_days": 1,
                 "triage_threshold_days": 1,
                 "stale_threshold_days": 5,
+                "urgency_reminder_hours": 4,
+                "urgency_escalation_hours": 8,
             }
             return form_class(data | changes, instance=RebookingSettings.load())
 
@@ -179,3 +181,49 @@ class RebookingSettingsFormTest(TestCase):
         stored = RebookingSettings.load()
         self.assertEqual(stored.stale_threshold_days, 7)
         self.assertEqual(stored.last_rebooking_on, day(8).date())
+
+    def test_ugf_9_settings_form_checks_the_urgency_thresholds(self) -> None:
+        """UGF-9: Given the settings admin form, when the reminder is 0 or 73,
+        or the escalation is not larger than the reminder, then it is invalid;
+        when the reminder is 1 or 72, or the escalation is empty, it is valid."""
+        # given
+        request = RequestFactory().get("/")
+        request.user = get_user_model().objects.create_superuser("root", password="x")
+        form_class = admin.site.get_model_admin(RebookingSettings).get_form(request)
+
+        def form(**changes: object):
+            data = {
+                "daily_run_time": "07:30",
+                "ai_review_threshold_days": 1,
+                "triage_threshold_days": 1,
+                "stale_threshold_days": 5,
+                "urgency_reminder_hours": 4,
+                "urgency_escalation_hours": 8,
+            }
+            return form_class(data | changes, instance=RebookingSettings.load())
+
+        # when / then
+        with self.subTest("reminder 0"):
+            self.assertIn(
+                "urgency_reminder_hours", form(urgency_reminder_hours=0).errors
+            )
+        with self.subTest("reminder 73"):
+            self.assertIn(
+                "urgency_reminder_hours", form(urgency_reminder_hours=73).errors
+            )
+        with self.subTest("reminder 1"):
+            self.assertTrue(form(urgency_reminder_hours=1).is_valid())
+        with self.subTest("reminder 72, escalation empty"):
+            self.assertTrue(
+                form(urgency_reminder_hours=72, urgency_escalation_hours="").is_valid()
+            )
+        with self.subTest("escalation equal to the reminder"):
+            self.assertIn(
+                "urgency_escalation_hours", form(urgency_escalation_hours=4).errors
+            )
+        with self.subTest("escalation below the reminder"):
+            self.assertIn(
+                "urgency_escalation_hours", form(urgency_escalation_hours=3).errors
+            )
+        with self.subTest("escalation above the reminder"):
+            self.assertTrue(form(urgency_escalation_hours=5).is_valid())

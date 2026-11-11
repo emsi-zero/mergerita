@@ -158,6 +158,8 @@ def _best_fit(
             if person.daily_merge_limit is not None
             else default_limit
         )
+        if limit == 0:
+            continue  # opted out of merging, even for urgent MRs (UGF-1)
         for window in _windows(person, days, leave_ranges[person.pk], now):
             day = timezone.localtime(window).date()
             used = counts[(person.pk, day)]
