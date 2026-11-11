@@ -48,3 +48,9 @@ rmo-reviewer APPROVE (2 Low below threshold). rmo-deep-reviewer COMMENT (1 Mediu
 Fixed: failure-isolation subTest in UGF-4; run_urgency_check now raises once at the end naming the failed requests so run_guarded alerts once per streak; idle_loop mocks run_urgency_check and a UGF-6 subTest asserts the worker calls it through run_guarded. README admin page name corrected.
 Accepted: escalation from a delegate who reports to the requester goes to the admins (fails safe); every pass re-locks pending requests past the reminder time, bounded by the pending set.
 No re-review (no Critical or High). Gate A green: 164 passed, trace 9/9. Session 2 done.
+
+## 2026-11-11 09:57 UTC — done
+Opted-out merge owners never get urgent merges (UGF-1); pending requests expire on merge (UGF-2); days off count in approver resolution (UGF-3); reminders and escalation for unanswered requests on their own cadence, with a watchdog case (UGF-4..8); admin-validated thresholds (UGF-9). 9/9 criteria traced; both gates green in both sessions.
+
+## 2026-11-11 09:57 UTC — spec closed
+Session archived: .claude/rmo/state/archive/session-20261111T095701Z.json
