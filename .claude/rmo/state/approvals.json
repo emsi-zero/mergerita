@@ -41,6 +41,12 @@
       "sha256": "13f806fe413189d8b42b28aceef22baa630ae1f58af10575769a3613bae85aae",
       "approved_at": "2026-11-11T09:25:17+00:00",
       "note": ""
+    },
+    {
+      "spec": "2026-11-14-closed-and-reopened-mrs",
+      "sha256": "20dbf90440dee8cef3a6cf53896380043475e2eb11777d3996dbf0ab1f30a8f9",
+      "approved_at": "2026-11-14T12:40:12+00:00",
+      "note": ""
     }
   ]
 }
